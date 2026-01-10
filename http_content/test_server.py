@@ -35,11 +35,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         global login_counter
         global hostname
         global ap_active
-        if self.path == '/logs':
+        if self.path == '/ve_infos':
             self.send_response(200)
             self.send_header('Content-type', 'text/plain')
             self.end_headers()
-            self.wfile.write(f"[info] logs counter at {log_counter}".encode())
+            self.wfile.write('[{"name":"One thing","a":"true"}, {"name":"and another","int":15,"float":2.4,"string":"works"}]'.encode())
+        elif self.path == '/logs':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(f"[info] logs counter at {log_counter}  ..................................................................................".encode())
             log_counter += 1
         elif self.path == '/discovered_wifis':
             self.send_response(200)

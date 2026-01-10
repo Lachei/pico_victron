@@ -18,7 +18,7 @@ include(cmake/html_pages_library.cmake)
 
 add_compile_options(-Wall)
 
-project(dcdc-converter C CXX)
+project(victron-control C CXX)
 
 pico_sdk_init()
 
@@ -32,7 +32,7 @@ endif()
 # ----------------------------------------------------------------------------
 # Website content
 # ----------------------------------------------------------------------------
-add_html_pages_library(NAME dcdc-converter-html SOURCES
+add_html_pages_library(NAME victron-control-html SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/http_content/404.html
         ${CMAKE_CURRENT_SOURCE_DIR}/http_content/index.html
         ${CMAKE_CURRENT_SOURCE_DIR}/http_content/style.css
@@ -45,31 +45,32 @@ add_html_pages_library(NAME dcdc-converter-html SOURCES
 # ----------------------------------------------------------------------------
 # Executable
 # ----------------------------------------------------------------------------
-add_executable(dcdc-converter
+add_executable(victron-control
         src/main.cpp
         src/dhcpserver.c
         src/dnsserver.c
         src/log_storage.cpp
         src/ntp_client.cpp
+        src/ve_bus.cpp
 )
-set_property(TARGET dcdc-converter PROPERTY CXX_STANDARD 23)
-target_compile_definitions(dcdc-converter PRIVATE
+set_property(TARGET victron-control PROPERTY CXX_STANDARD 26)
+target_compile_definitions(victron-control PRIVATE
         WIFI_SSID=\"${WIFI_SSID}\"
         WIFI_PASSWORD=\"${WIFI_PASSWORD}\"
 )
-target_include_directories(dcdc-converter PRIVATE
+target_include_directories(victron-control PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-target_link_libraries(dcdc-converter
+target_link_libraries(victron-control
         pico_stdlib
         pico_mbedtls
         hardware_flash
         pico_cyw43_arch_lwip_sys_freertos
         pico_lwip_mdns
         FreeRTOS-Kernel-Heap4 # FreeRTOS kernel and dynamic heap
-        dcdc-converter-html
+        victron-control-html
 )
-pico_add_extra_outputs(dcdc-converter)
-pico_enable_stdio_usb(dcdc-converter 1)
-pico_enable_stdio_uart(dcdc-converter 0)
+pico_add_extra_outputs(victron-control)
+pico_enable_stdio_usb(victron-control 1)
+pico_enable_stdio_uart(victron-control 0)
 

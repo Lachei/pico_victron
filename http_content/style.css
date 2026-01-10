@@ -9,6 +9,9 @@ details{padding:10px;border-radius:20px;border:1px solid black;cursor:pointer;ma
 #v{width:100%;margin-top:4px;padding:1px;overflow:hidden;}
 #l{font-family:monospace;}
 #ap{width:1rem;height:1rem;margin-left:1rem;}
+#mv{margin-left:1rem;}
+.ms{margin-left:1rem;}
+.se:nth-child(2n){background-color: #19f7;}
 .s{box-shadow:0 0 0 3px green;}
 .t{display:inline-grid;text-align:center;padding:1rem 0;cursor:pointer;border-radius:20px;}
 .t:hover{background-color:green;transition: background-color 500ms linear;}

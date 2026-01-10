@@ -4,15 +4,42 @@
 
 #include "static_types.h"
 #include "tcp_server/tcp_server.h"
-#include "dcdc-converter-html.h"
+#include "victron-control-html.h"
 #include "wifi_storage.h"
 #include "access_point.h"
 #include "persistent_storage.h"
 #include "crypto_storage.h"
 #include "ntp_client.h"
+#include "ve_bus.h"
 
-using tcp_server_typed = tcp_server<12, 5, 2, 0>;
+std::string_view pb(bool b) { return b ? "true": "false"; }
+
+using tcp_server_typed = tcp_server<13, 5, 2, 0>;
 tcp_server_typed& Webserver() {
+	const auto get_ve_infos = [] (const tcp_server_typed::message_buffer &req, tcp_server_typed::message_buffer &res) {
+		res.res_set_status_line(HTTP_VERSION, STATUS_OK);
+		res.res_add_header("Server", "LacheiEmbed(josefstumpfegger@outlook.de)");
+		res.res_add_header("Content-Type", "text/plain");
+		auto length_hdr = res.res_add_header("Content-Length", "        ").value; // at max 8 chars for size
+		res.res_write_body("["); // add header end sequence, start array of infos
+		MasterMultiLed led = VEBus::Default().GetMasterMultiLed();
+		res.buffer.append_formatted("{{\"name\":\"Led Infos\",\"MainsOn\":{},\"AbsorptionOn\":{},\"BulkOn\":{},\"FloatOn\":{},\"InverterOn\":{},\"OverloadOn\":{},\"LowBatteryOn\":{},\"TemperatureOn\":{},\"MainsBlink\":{},\"AbsorptionBlink\":{},\"BulkBlink\":{},\"FloatBlink\":{},\"InverterBlink\":{},\"OverloadBlink\":{},\"LowBatteryBlink\":{},\"TemperatureBlink\":{},\"LowBattery\":{},\"AcInputConfiguration\":{},\"MinimumInputCurrentLimitA\":{},\"MaximumInputCurrentLimitA\":{},\"ActualInputCurrentLimitA\":{},\"SwitchRegister\":{} }},\n", 
+			      pb(led.LEDon.MainsOn), pb(led.LEDon.Absorption), pb(led.LEDon.Bulk), pb(led.LEDon.Float), pb(led.LEDon.InverterOn), pb(led.LEDon.Overload), pb(led.LEDon.LowBattery), pb(led.LEDon.Temperature),
+			      pb(led.LEDblink.MainsOn), pb(led.LEDblink.Absorption), pb(led.LEDblink.Bulk), pb(led.LEDblink.Float), pb(led.LEDblink.InverterOn), pb(led.LEDblink.Overload), pb(led.LEDblink.LowBattery), pb(led.LEDblink.Temperature),
+			      pb(led.LowBattery), int(led.AcInputConfiguration), led.MinimumInputCurrentLimitA, led.MaximumInputCurrentLimitA, led.ActualInputCurrentLimitA, int(led.SwitchRegister)); 
+		MultiPlusStatus status = VEBus::Default().GetMultiPlusStatus();
+		res.buffer.append_formatted("{{\"name\":\"Multi Plus Status\",\"Temp\":{},\"DcCurrentA\":{},\"BatterieAh\":{},\"DcLevelAllowsInverting\":{}}},\n",
+			      status.Temp, status.DcCurrentA, status.BatterieAh, pb(status.DcLevelAllowsInverting));
+		DcInfo dc = VEBus::Default().GetDcInfo();
+		res.buffer.append_formatted("{{\"name\":\"Dc Info\",\"Voltage\":{},\"CurrentInverting\":{},\"CurrentCharging\":{}}},\n",
+			      dc.Voltage, dc.CurrentInverting, dc.CurrentCharging);
+		AcInfo ac = VEBus::Default().GetAcInfo(PhaseInfo::L3);
+		res.buffer.append_formatted("{{\"name\":\"Ac Info\",\"PhaseInfo\":{},\"PhaseState\":{},\"MainVoltage\":{},\"MainCurrent\":{},\"InverterVoltage\":{},\"InverterCurrent\":{}}}",
+			      int(ac.Phase), int(ac.State), ac.MainVoltage, ac.MainCurrent, ac.InverterVoltage, ac.InverterCurrent);
+		res.res_write_body("]");
+		if (0 == format_to_sv(length_hdr, "{}", res.body.size()))
+			LogError("Failed to write header length");
+	};
 	const auto static_page_callback = [] (std::string_view page, std::string_view status, std::string_view type = "text/html") {
 		return [page, status, type](const tcp_server_typed::message_buffer &req, tcp_server_typed::message_buffer &res){
 			res.res_set_status_line(HTTP_VERSION, status);
@@ -200,6 +227,7 @@ tcp_server_typed& Webserver() {
 		.port = 80,
 		.default_endpoint_cb = static_page_callback(_404_HTML, STATUS_NOT_FOUND),
 		.get_endpoints = {
+			tcp_server_typed::endpoint{{.path_match = true}, "/ve_infos", get_ve_infos},
 			// interactive endpoints
 			tcp_server_typed::endpoint{{.path_match = true}, "/logs", get_logs},
 			tcp_server_typed::endpoint{{.path_match = true}, "/discovered_wifis", get_discovered_wifis},

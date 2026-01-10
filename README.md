@@ -1,12 +1,12 @@
-# Pico Iot
+# Pico Victorn
 
-This repository contains a base system for iot applications with the raspberry pi pico based on [the pico-sdk](https://github.com/raspberrypi/pico-sdk).
-
-The basis for this project further are the [wlan freertos examples from the pico-example repository](https://github.com/raspberrypi/pico-examples/tree/master/pico_w/wifi/freertos).
+This repository contains code for a raspberry pi pico w to communicate with a victron inverter via ve-bus.
 
 [TOC]
 
 ## Intro Scope
+
+### Base support
 
 The goal of this project is to have a simple, quickly-buildabla and easily extensible base pico system that supports the following base services:
 - Easy setup of access point
@@ -22,6 +22,14 @@ The goal of this project is to have a simple, quickly-buildabla and easily exten
 - Wifi configuration via webserver and usb interface
 - Access point activation via webserver and usb interface
 - Hostname setting via webserver interface
+
+### Victron support
+
+Additionally to the base support:
+- Set power to charge the battery (Includes negative power to use the battery as storage)
+- Monitor current power
+- Support REST endpoints to be remote controlled
+- Support self control
 
 ## Capability details
 

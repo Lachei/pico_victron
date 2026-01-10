@@ -22,6 +22,7 @@
 #include "measurements.h"
 #include "crypto_storage.h"
 #include "ntp_client.h"
+#include "ve_bus.h"
 
 #define TEST_TASK_PRIORITY ( tskIDLE_PRIORITY + 1UL )
 
@@ -35,14 +36,6 @@ void usb_comm_task(void *) {
     for (;;) {
 	handle_usb_command();
     }
-}
-
-void measure_task(void *) {
-}
-
-void control_task(void *) {
-    time_us_64();
-
 }
 
 void wifi_search_task(void *) {
@@ -64,6 +57,13 @@ void wifi_search_task(void *) {
     }
 }
 
+void vebus_infos_task(void *) {
+    LogInfo("Starting to monitor ve bus");
+    for (;;) {
+        VEBus::Default().Maintain();
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
 
 // task to initailize everything and only after initialization startin all other threads
 // cyw43 init has to be done in freertos task because it utilizes freertos synchronization variables
@@ -80,6 +80,7 @@ void startup_task(void *) {
     cyw43_arch_enable_sta_mode();
     Webserver().start();
     LogInfo("Ready, running http at {}", ip4addr_ntoa(netif_ip4_addr(netif_list)));
+    VEBus::Default().Setup();
     LogInfo("Initialization done");
     std::cout << "Initialization done, get all further info via the commands shown in 'help'\n";
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
@@ -92,7 +93,7 @@ void startup_task(void *) {
     if (err != pdPASS)
         LogError("Failed to start usb communication task with code {}" ,err);
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
-    for (;;) vTaskDelay(1<<20);
+    vebus_infos_task({});
 }
 
 int main( void )

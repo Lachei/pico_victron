@@ -1,27 +1,40 @@
 <!DOCTYPE html>
 <html>
- <head><meta charset="utf-8"></head>
- <body>
-  <h3>Messwerte:</h3>
-  <h3>Logs:</h3>
-  <select onchange="sl();" id="ll">Log level <option>Info</option><option>Warning</option><option>Error</option><option>Fatal</option></select>
-  <label for="ll">Log level setzen</label><p>
-  <pre id="l"></pre>
- </body>
- <script>
- var d=document;
- var l=d.getElementById("l");
- var ll=d.getElementById("ll");
- const f=async ()=>{
-  if(parent.p!="u"||!parent.lo)return;
-  let logs=await fetch("logs", {signal: AbortSignal.timeout(500)});
-  let t=await logs.text();
-  l.innerHTML=t.replace(/(?:\r\n|\r|\n)/g, '<br>');
- };
- window.onload = ()=>{
-  parent.m["u"]=f;
-  setInterval(f,4000);
- }
- const sl=async()=>{await fetch("set_log_level",{method:"POST",body:ll.options[ll.selectedIndex].text});};
- </script>
+	<head><meta charset="utf-8"></head>
+	<body>
+		<h3>Messwerte:</h3>
+		<div id="mv"></div>
+		<h3>Logs:</h3>
+		<select onchange="sl();" id="ll">Log level <option>Info</option><option>Warning</option><option>Error</option><option>Fatal</option></select>
+		<label for="ll">Log level setzen</label><p>
+		<pre id="lv" style="overflow:scroll"></pre>
+	</body>
+	<script>
+	async function m(){
+		if(parent.p!="u"||!parent.lo)return;
+		let ms=await (await fetch("/ve_infos")).json();
+		let h="";
+		for (let e of ms) {
+			h += "<b>" + e.name + "</b><br><table class='ms'>";
+			for (let k of Object.keys(e)) {
+				if (k === "name") continue;
+				h += "<tr class='se'><td>" + k + "</td><td>" + e[k] + "</td></tr>";
+			}
+			h += "</table>";
+		}
+		mv.innerHTML = h;
+	};
+	async function l(){
+		if(parent.p!="u"||!parent.lo)return;
+		let logs=await fetch("logs", {signal: AbortSignal.timeout(500)});
+		let t=await logs.text();
+		lv.innerHTML=t.replace(/(?:\r\n|\r|\n)/g, '<br>');
+	};
+	window.onload = ()=>{
+		parent.m["u"]=l;
+		setInterval(m,500);
+		setInterval(l,4000);
+	}
+	const sl=async()=>{await fetch("set_log_level",{method:"POST",body:ll.options[ll.selectedIndex].text});};
+	</script>
 </html>

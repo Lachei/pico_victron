@@ -27,7 +27,7 @@ struct wifi_storage {
 	static_string<64> pwd_wifi{};
 	bool hostname_inited{false};
 	bool hostname_changed{true};
-	static_string<64> hostname{"DcDcConverter"};
+	static_string<64> hostname{"victron-control"};
 	static_string<64> mdns_service_name{"lachei_tcp_server"};
 
 	void update_hostname() {
@@ -35,7 +35,11 @@ struct wifi_storage {
 			return;
 
 		LogInfo("Hostname change detected, adopting hostname");
-		netif_set_hostname(&cyw43_state.netif[CYW43_ITF_STA], hostname.data());
+		struct netif* nif = &cyw43_state.netif[CYW43_ITF_STA];
+		netif_set_hostname(nif, hostname.data());
+		dhcp_release(nif);
+		dhcp_stop(nif);
+		dhcp_start(nif);
 		if (!hostname_inited) {
 			mdns_resp_init(); 
 			mdns_resp_add_netif(&cyw43_state.netif[CYW43_ITF_STA], hostname.data());

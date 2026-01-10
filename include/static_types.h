@@ -58,6 +58,10 @@ template<typename T, int N>
 struct static_vector {
 	std::array<T, N> storage{};
 	int cur_size{};
+	constexpr T& operator[](int i) { return (i < 0 || i >= cur_size) ? storage[0]: storage[i]; }
+	constexpr const T& operator[](int i) const { return (i < 0 || i >= cur_size) ? storage[0]: storage[i]; }
+	constexpr T* back() { return cur_size ? &storage[cur_size - 1]: nullptr; }
+	constexpr int back_idx() const { return cur_size - 1; }
 	constexpr T* begin() { return storage.begin(); }
 	constexpr T* end() { return storage.begin() + cur_size; }
 	constexpr const T* begin() const { return storage.begin(); }
@@ -65,12 +69,30 @@ struct static_vector {
 	constexpr T* push() { if (cur_size >= N) return {}; return storage.data() + cur_size++; }
 	constexpr bool push(const T& e) { if (cur_size == N) return false; storage[cur_size++] = e; return true; }
 	constexpr bool push(T&& e) { if (cur_size == N) return false; storage[cur_size++] = std::move(e); return true; }
+	constexpr T* pop() { if (cur_size) --cur_size; return end(); }
 	template<typename F>
 	constexpr void remove_if(F &&f) { for (int i = cur_size - 1; i >= 0; --i) if( f(storage[i]) ) { std::swap(storage[i], storage[cur_size - 1]); --cur_size; } }
+	[[nodiscard]]
+	constexpr bool resize(int size) { if(size > N || size < 0) return false; cur_size = size; return true; }
 	constexpr void clear() { cur_size = 0; }
 	constexpr bool empty() const { return cur_size == 0; }
 	constexpr int size() const { return cur_size; }
 	constexpr void sanitize() { if (cur_size > N || cur_size < 0) cur_size = 0; }
+};
+
+template <int N>
+struct std::formatter<static_vector<uint8_t, N>> {
+
+    constexpr auto parse(std::format_parse_context& ctx) {
+        return ctx.begin();
+    }
+
+    auto format(const static_vector<uint8_t, N> &r, std::format_context& ctx) const {
+	std::format_to(ctx.out(), "[");
+	for (uint8_t v: r)
+		std::format_to(ctx.out(), "{:#04x}, ", int(v));
+        return std::format_to(ctx.out(), "]");
+    }
 };
 
 template<typename T, int N>
