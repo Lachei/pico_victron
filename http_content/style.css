@@ -6,10 +6,11 @@ button:hover{background-color:green;transition: background-color 150ms linear;}
 input[type=password]{margin-right: .5rem;}
 checkbox{appearance: none; width:40px; height:20px; background:#ccc; border-radius:20px; position:relative;" onchange="this.style.background=this.checked?'#4caf50':'#ccc';}
 details{padding:10px;border-radius:20px;border:1px solid black;cursor:pointer;margin:2px}
+hr{border: 1px solid #0003;}
 #v{width:100%;margin-top:4px;padding:1px;overflow:hidden;}
 #l{font-family:monospace;}
 #ap{width:1rem;height:1rem;margin-left:1rem;}
-#mv{margin-left:1rem;}
+#mv{margin-left:1rem;display:flex;flex-wrap:wrap;}
 .ms{margin-left:1rem;}
 .se:nth-child(2n){background-color: #19f7;}
 .s{box-shadow:0 0 0 3px green;}

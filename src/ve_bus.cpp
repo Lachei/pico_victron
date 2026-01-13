@@ -37,7 +37,7 @@ float convertRamVarToValueSigned(RamVariables variable, int16_t rawValue, const 
 uint16_t convertSettingToRawValue(Settings setting, float value, const SettingInfos &settingInfoList);
 float convertSettingToValue(Settings setting, uint16_t rawValue, const SettingInfos &settingInfoList);
 
-void communication_task(void* handler_args)
+void VEBusDefinition::communication_task(void* handler_args)
 {
 	VEBus *ve_bus = static_cast<VEBus*>(handler_args);
 
@@ -46,6 +46,20 @@ void communication_task(void* handler_args)
 		ve_bus->commandHandling();
 		//vTaskDelay(1 / portTICK_RATE_MS);
 		taskYIELD();
+	}
+}
+
+std::string_view VEBusDefinition::to_sv(PhaseInfo phase) {
+	switch(phase) {
+		case L4: return {"L4"};
+		case L3: return {"L3"};
+		case L2: return {"L2"};
+		case S_L1: return {"S_L1"};
+		case S_L2: return {"S_l2"};
+		case S_L3: return {"S_L3"};
+		case S_L4: return {"S_L4"};
+		case DC: return {"DC"};
+		default: return {"unknown"};
 	}
 }
 

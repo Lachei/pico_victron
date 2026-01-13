@@ -2,11 +2,12 @@
 <html style="height:100%;background:linear-gradient(-45deg,#ee7752,#e73c7e,#23a6d5,#23d5ab);">
 <head><meta charset="utf-8"><title>Victron Steuerung</title><link rel="stylesheet" href="style.css">
 <meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<script>var m={}</script>
 <body style="height:calc(100% - 16px);display:grid;grid-template-rows:auto auto 1fr;">
- <div>
-  <div id="td" style="float:left;background-color:#fff8;border-radius:10px;padding:.3rem;">&#x1f550; Nicht synchronisiert</div>
-  <button id="li" style="float:right" onclick="li();">Anmelden</button>
-  <h1 style="text-align:center">Victron Steuerung</h1>
+ <div style="display:grid;grid-template-columns:20% 1fr 20%">
+  <div id="td" style="height:fit-content;background-color:#fff8;border-radius:10px;padding:.3rem;">&#x1f550; Nicht synchronisiert</div>
+  <h1 style="text-align:center;margin:.5rem 0 .5rem 0">Victron Steuerung</h1>
+  <button id="liv" style="height:fit-content" onclick="li();">Anmelden</button>
  </div>
  <div style="display:grid;grid-template-columns:repeat(3, auto);background-color:#d9ffd9;border-radius:20px;">
   <div class="t u  s">Übersicht</div>
@@ -15,19 +16,15 @@
  </div>
  <div id="v">
   <div style="display:grid;grid-template-columns:repeat(3, 100%);grid-gap:10px;height:100%;">
-   <iframe id="u" class="tp" src="overview.html" onload="document.getElementById('e').loading='eager';"></iframe>
-   <iframe id="e" class="tp" loading="lazy" src="settings.html" onload="d.getElementById('i').loading='eager';"></iframe>
+   <iframe id="u" class="tp" src="overview.html" onload="e.loading='eager';"></iframe>
+   <iframe id="e" class="tp" loading="lazy" src="settings.html" onload="i.loading='eager';"></iframe>
    <iframe id="i" class="tp" loading="lazy" src="internet.html" onload="ol();"></iframe>
   </div
  </div>
  <script>
   var p="u";
   var lo=0;
-  var m={};
   var d=document;
-  var v=d.getElementById('v');
-  var lie=d.getElementById('li');
-  var td=d.getElementById('td');
   var t0=0,tu=0;
   for(let a of d.getElementsByClassName("t")){a.onclick=()=>{d.querySelectorAll('.s')[0].classList.remove('s');let x=d.getElementById(a.classList[1]).getBoundingClientRect().x+v.scrollLeft-v.getBoundingClientRect().x;v.scrollTo({left:x,behavior:"smooth"}); p=a.classList[1];if(a.classList[1] in m)m[a.classList[1]]();a.classList.add('s');};};
   function ol(){ let c = d.styleSheets[0].cssRules;
@@ -36,13 +33,13 @@
    lo=1;gd();pd();};
   async function li(){await fetch("login",{method:"POST"});await cu();}
   window.onresize=()=>{let x=d.getElementById(p).getBoundingClientRect().x+v.scrollLeft-v.getBoundingClientRect().x;v.scrollTo({left:x});}
-  async function cu(){try{let l=await fetch("user");let u=await l.text();if(!u||u.length===0)throw 0;lie.innerHTML=u;}catch(e){lie.innerHTML='Anmelden';};};
+  async function cu(){try{let l=await fetch("user");let u=await l.text();if(!u||u.length===0)throw 0;liv.innerHTML=u;}catch(e){liv.innerHTML='Anmelden';};};
   setInterval(cu, 10000);
   async function gd(){try{let t=await fetch("time");t0=parseInt(await t.text());tu=(new Date()).getTime()/1000;}catch(e){t0=0;}}
   setInterval(gd, 10000);
   function st(){if(t0==0)throw new Error("Server time not synched");return new Date(t0*1000+(new Date()).getTime()-tu*1000);}
   async function pd(){;if(t0==0){td.innerHTML='&#x1f550; Zeit nicht synchronisiert';return;}td.innerHTML='&#x1f550;'+st().toLocaleString();}
-  setInterval(pd, 1000);
+  setInterval(pd, 2000);
  </script>
 </body>
 </html>

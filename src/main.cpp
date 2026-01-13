@@ -29,6 +29,8 @@
 constexpr UBaseType_t STANDARD_TASK_PRIORITY = tskIDLE_PRIORITY + 1ul;
 constexpr UBaseType_t CONTROL_TASK_PRIORITY = tskIDLE_PRIORITY + 10ul;
 
+uint32_t time_s() { return time_us_64() / 1000000; }
+
 void usb_comm_task(void *) {
     LogInfo("Usb communication task");
     crypto_storage::Default();
@@ -45,15 +47,33 @@ void wifi_search_task(void *) {
 
     wifi_storage::Default().update_hostname();
 
+    constexpr uint32_t ap_timeout = 10;
+    uint32_t cur_time = time_s();
+    uint32_t last_conn = cur_time;
+
     for (;;) {
         LogInfo("Wifi update loop");
-        wifi_storage::Default().update_wifi_connection();
-        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, wifi_storage::Default().wifi_connected);
+        cur_time = time_s();
+        uint32_t dt = cur_time - last_conn;
+        if ((dt > 30 && cur_time % 10 == 0) || // after 30 seconds only retry every 10 seconds
+            (dt > 20 && dt <= 30 && cur_time % 5 == 0) || // after 20 seconds only retry every 5 seconds
+            (dt > 10 && dt <= 20 && cur_time % 3 == 0) || // after 10 seconds only retry every 3 seconds
+            (dt <= 10))   // until 10 seconds retry every second
+            wifi_storage::Default().update_wifi_connection();
+        if (wifi_storage::Default().wifi_connected)
+            last_conn = cur_time;
+        if (dt > ap_timeout) {
+            access_point::Default().init();
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, cur_time & 1);
+        } else {
+            access_point::Default().deinit();
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, wifi_storage::Default().wifi_connected);
+        }
         wifi_storage::Default().update_hostname();
         wifi_storage::Default().update_scanned();
         if (wifi_storage::Default().wifi_connected)
             ntp_client::Default().update_time();
-        vTaskDelay(wifi_storage::Default().wifi_connected ? 5000: 1000);
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 

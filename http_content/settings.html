@@ -1,19 +1,49 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"></head>
-<body>
-<h3>Einstellungen</h3>
-<h4>Passwort ändern</h4>
-<p><input id="pw1" type="password"><label for="pw1">Passwort eingeben</label>
-<p><input id="pw2" type="password"><label for="pw2">Passwort wiederholen</label>
-<p><button onclick="sp();">Passwort ändern</button>
-<p><pre id="e" class="er d">Passwörter nicht gleich</pre>
-</body>
-<script>
-var d=document;
-var pw1=d.getElementById("pw1");
-var pw2=d.getElementById("pw2");
-var e=d.getElementById("e");
-const sp=async()=>{if(pw1.value!=pw2.value)e.classList.remove("d");else {e.classList.add("d");await fetch("set_password",{method:"PUT",body:pw1.value});pw1.value=pw2.value="";}};
-</script>
+	<head><meta charset="utf-8"></head>
+	<body>
+		<h3>Einstellungen</h3>
+		<h4>Wechselrichtereinstellungen:</h4>
+		<p><label for="e">Victron Einstellungen überschreiben</label><input id="e" onchange="en(this.checked);ch();" type="checkbox">
+		<p><label for="t">Modus</label><select id="t" style="margin-left:.2rem" class="en" onchange="ch();"><option>Aus</option><option>Laden</option><option>Entladen</option><option>Wechselrichten</option></select>
+		<div>
+			<p><b>Min-Max</b>
+			<p><label for="mm">Einheit</label><select id="mm" style="margin-left:.2rem" class="en" onchange="sm();ch();"><option>SOC</option><option>V</option></select>
+			<div id="ss">
+				<p><label for="mins">Min SOC (%):</label><input id="mins" class="en" value="5" onchange="ch();"><br>
+				<p><label for="mins">Max SOC (%):</label><input id="maxs" class="en" value="95" onchange="ch();"><br>
+			</div>
+			<div id="vs">
+				<p><label for="minv">Min Spannung (V):</label><input id="minv" class="en" value="46" onchange="ch();"><br>
+				<p><label for="minv">Max Spannung (V):</label><input id="maxv" class="en" value="55" onchange="ch();"><br>
+			</div>
+		</div>
+		<p><label for="minw">Max Entladeleistung (W):</label><input id="minw" class="en" value="4000" onchange="ch();"><br>
+		<p><label for="minw">Max Ladeeistung (W):</label><input id="maxw" class="en" value="4000" onchange="ch();"><br>
+		<hr>
+		<h4>Passwort ändern</h4>
+		<p><input id="pw1" type="password"><label for="pw1">Passwort eingeben</label>
+		<p><input id="pw2" type="password"><label for="pw2">Passwort wiederholen</label>
+		<p><button onclick="sp();">Passwort ändern</button>
+		<p><pre id="e" class="er d">Passwörter nicht gleich</pre>
+	</body>
+	<script>
+function en(e) {for (let c of document.getElementsByClassName("en")) if(e) c.disabled=false; else c.disabled=true;}
+async function sp(){if(pw1.value!=pw2.value)e.classList.remove("d");else {e.classList.add("d");await fetch("set_password",{method:"PUT",body:pw1.value});pw1.value=pw2.value="";}};
+async function ch(){
+	let ov= e.checked ? true: false;
+	let s={override:ov};
+	if (ov) {
+		s.mode=t.selectedIndex, s.mmtype=mm.selectedIndex, s.mins=+mins.value, s.maxs=+maxs.value,
+		s.minv=+minv.value, s.maxv=+maxv.value, s.minw=-minw.value, s.maxw=+maxw.value;
+	}
+	await fetch("/ui_settings", {method: 'PUT', body:JSON.stringify(s)});
+}
+async function sm() {
+	if (mm.selectedIndex === 0) {ss.style.display="block";vs.style.display="none";}
+	if (mm.selectedIndex === 1) {ss.style.display="none";vs.style.display="block";}
+}
+	en(false);
+	sm();
+	</script>
 </html>

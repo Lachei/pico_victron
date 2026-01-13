@@ -33,9 +33,14 @@ tcp_server_typed& Webserver() {
 		DcInfo dc = VEBus::Default().GetDcInfo();
 		res.buffer.append_formatted("{{\"name\":\"Dc Info\",\"Voltage\":{},\"CurrentInverting\":{},\"CurrentCharging\":{}}},\n",
 			      dc.Voltage, dc.CurrentInverting, dc.CurrentCharging);
-		AcInfo ac = VEBus::Default().GetAcInfo(PhaseInfo::L3);
-		res.buffer.append_formatted("{{\"name\":\"Ac Info\",\"PhaseInfo\":{},\"PhaseState\":{},\"MainVoltage\":{},\"MainCurrent\":{},\"InverterVoltage\":{},\"InverterCurrent\":{}}}",
-			      int(ac.Phase), int(ac.State), ac.MainVoltage, ac.MainCurrent, ac.InverterVoltage, ac.InverterCurrent);
+		for (uint8_t phase = PHASE_START; phase < PHASE_END; ++phase) {
+			PhaseInfo pi{static_cast<PhaseInfo>(phase)};
+			AcInfo ac = VEBus::Default().GetAcInfo(pi);
+			if (phase != PHASE_START)
+				res.res_write_body(",");
+			res.buffer.append_formatted("{{\"name\":\"Ac Info {}\",\"PhaseInfo\":{},\"PhaseState\":{},\"MainVoltage\":{},\"MainCurrent\":{},\"InverterVoltage\":{},\"InverterCurrent\":{}}}",
+			      to_sv(pi), int(ac.Phase), int(ac.State), ac.MainVoltage, ac.MainCurrent, ac.InverterVoltage, ac.InverterCurrent);
+		}
 		res.res_write_body("]");
 		if (0 == format_to_sv(length_hdr, "{}", res.body.size()))
 			LogError("Failed to write header length");

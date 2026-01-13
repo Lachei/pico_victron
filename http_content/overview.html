@@ -15,12 +15,12 @@
 		let ms=await (await fetch("/ve_infos")).json();
 		let h="";
 		for (let e of ms) {
-			h += "<b>" + e.name + "</b><br><table class='ms'>";
+			h += "<div style='margin:.3rem;padding:.2rem;border:1px solid;border-radius:10px;'><b>" + e.name + "</b><br><table class='ms'>";
 			for (let k of Object.keys(e)) {
 				if (k === "name") continue;
 				h += "<tr class='se'><td>" + k + "</td><td>" + e[k] + "</td></tr>";
 			}
-			h += "</table>";
+			h += "</table></div>";
 		}
 		mv.innerHTML = h;
 	};

@@ -110,14 +110,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             super().do_POST()
 
     def do_PUT(self):
-        if self.path == '/set_password':
+        if self.path == '/ui_settings':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            content_len = int(self.headers.get('content-length', 0))
+            settings = self.rfile.read(content_len).decode()
+            print('Set ui settings to :', settings)
+        elif self.path == '/set_password':
             self.send_response(200)
             self.send_header('Content-type', 'text/plain')
             self.end_headers()
             content_len = int(self.headers.get('content-length', 0))
             pwd = self.rfile.read(content_len).decode()
             print('Set password to:', pwd)
-        if self.path == '/time':
+        elif self.path == '/time':
             self.send_response(200)
             self.send_header('Content-type', 'text/plain')
             self.end_headers()

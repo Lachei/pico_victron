@@ -252,6 +252,8 @@ namespace VEBusDefinition
         DC = 0x0C,
     };
     constexpr uint8_t PhaseToIdx(PhaseInfo p) { return static_cast<uint8_t>(p) - static_cast<uint8_t>(PhaseInfo::L4); }
+    constexpr uint8_t PHASE_START = static_cast<uint8_t>(PhaseInfo::L4);
+    constexpr uint8_t PHASE_END = static_cast<uint8_t>(PhaseInfo::DC) + 1;
     constexpr uint8_t PHASES_COUNT = static_cast<uint8_t>(PhaseInfo::DC) - static_cast<uint8_t>(PhaseInfo::L4);
 
     enum PhaseState
@@ -359,5 +361,8 @@ namespace VEBusDefinition
         {     -1,      0,  true, ResponseDataType::floatingPoint}, // InverterPower2NF
         {     -1,      0,  true, ResponseDataType::floatingPoint}};// OutputPowerNF
 #endif // MULTIPLUS_II_12_3000
+
+    void communication_task(void* handler_args);
+    std::string_view to_sv(PhaseInfo phase);
 }
 

@@ -50,8 +50,6 @@ struct VEBus
         RequestError error;
     };
 
-    friend void communication_task(void* handler_args);
-
     std::function<void(ResponseData&)> response_cb;
     std::function<void(VEBusBuffer&)> receive_cb;
 
