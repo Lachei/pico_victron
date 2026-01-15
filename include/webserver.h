@@ -200,8 +200,8 @@ tcp_server_typed& Webserver() {
 		auto t = req.body;
 		std::string_view ssid = extract_word(t);
 		std::string_view password = extract_word(t);
-		if (ssid.empty() || password.empty()) {
-			LogError("Missing ssid or password for setting wifi connection");
+		if (ssid.empty() || password.size() < 8) {
+			LogError("Missing ssid or password less than 8 for setting wifi connection");
 			return;
 		}
 		auto &wifi = wifi_storage::Default();
@@ -209,7 +209,6 @@ tcp_server_typed& Webserver() {
 		wifi.ssid_wifi.make_c_str_safe();
 		wifi.pwd_wifi.fill(password);
 		wifi.pwd_wifi.make_c_str_safe();
-		wifi.wifi_connected = false;
 		wifi.wifi_changed = true;
 		if (PICO_OK != persistent_storage_t::Default().write(wifi.ssid_wifi, &persistent_storage_layout::ssid_wifi))
 			LogError("Failed to store ssid_wifi");

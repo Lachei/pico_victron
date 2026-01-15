@@ -15,7 +15,7 @@
 		let ms=await (await fetch("/ve_infos")).json();
 		let h="";
 		for (let e of ms) {
-			h += "<div style='margin:.3rem;padding:.2rem;border:1px solid;border-radius:10px;'><b>" + e.name + "</b><br><table class='ms'>";
+			h += "<div style='margin:.3rem;padding:.2rem;border:1px solid;border-radius:10px;height:fit-content'><b>" + e.name + "</b><br><table class='ms'>";
 			for (let k of Object.keys(e)) {
 				if (k === "name") continue;
 				h += "<tr class='se'><td>" + k + "</td><td>" + e[k] + "</td></tr>";
@@ -32,7 +32,7 @@
 	};
 	window.onload = ()=>{
 		parent.m["u"]=l;
-		setInterval(m,500);
+		setInterval(m,1000);
 		setInterval(l,4000);
 	}
 	const sl=async()=>{await fetch("set_log_level",{method:"POST",body:ll.options[ll.selectedIndex].text});};

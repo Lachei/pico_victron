@@ -55,23 +55,27 @@ struct wifi_storage {
 	void update_wifi_connection() {
 		wifi_connected = CYW43_LINK_UP == cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA);
 		bool wifi_available = wifis | contains{ssid_wifi.sv(), [](const wifi_info &w) { return w.ssid.sv(); }};
-		if ((wifi_connected && !wifi_changed) || ssid_wifi.cur_size == 0 || pwd_wifi.cur_size < 8 || !wifi_available)
+		if (!wifi_changed || ssid_wifi.cur_size == 0 || pwd_wifi.cur_size < 8 || !wifi_available)
 			return;
 
+		LogInfo("Connecting to wifi");
 		if (wifi_changed) {
+			cyw43_arch_lwip_begin();
 			cyw43_arch_disable_sta_mode();
 			cyw43_arch_enable_sta_mode();
+			cyw43_arch_lwip_end();
 		}
-
-		LogInfo("Connecting to wifi");
-		if (PICO_OK != cyw43_arch_wifi_connect_timeout_ms(ssid_wifi.data(), pwd_wifi.data(), CYW43_AUTH_WPA2_AES_PSK, 5000)) {
-			LogWarning("failed to connect, retry next update_wifi_connection_call()");
+		if (PICO_OK != cyw43_arch_wifi_connect_async(ssid_wifi.data(), pwd_wifi.data(), CYW43_AUTH_WPA2_AES_PSK)) {
+			LogWarning("failed to call cyw43_arch_wifi_connect_async()");
+			return; // avoid resetting wifi_changed, retry next iteration
 		}
 
 		wifi_changed = false;
 	}
 	
 	void update_scanned() {
+		if (cyw43_wifi_scan_active(&cyw43_state))
+			return;
 		cyw43_wifi_scan_options_t scan_options = {0};
 		if (0 != cyw43_wifi_scan(&cyw43_state, &scan_options, NULL, _scan_result)) {
 			LogError("Failed wifi scan");

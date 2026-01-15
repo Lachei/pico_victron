@@ -36,7 +36,11 @@ hi.value=w;} };
 window.onload=()=>{parent.m["i"]=f;setInterval(f,4000);}
 const uap=async()=>{await fetch("ap_active",{method:"POST",body:String(ap.checked)})};
 const uh=async()=>{await fetch("host_name",{method:"POST",body:hi.value})};
-const co=async(id)=>{await fetch("wifi_connect",{method:"POST",body:id+" "+d.getElementById(id+"pw").value});}
+const co=async(id)=>{
+	let pwd=d.getElementById(id+"pw").value;
+	if (pwd.length < 8)
+		return;
+	await fetch("wifi_connect",{method:"POST",body:id+" "+pwd});}
 function t(){ct.innerHTML=(new Date()).toLocaleString();}
 setInterval(t, 500);
 async function st(){let t=await fetch("time",{method:"PUT",body:""+Math.round((new Date()).getTime()/1000)});}

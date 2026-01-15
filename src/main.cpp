@@ -6,6 +6,7 @@
 
 #include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
+#include "hardware/adc.h"
 
 #include "lwip/ip4_addr.h"
 #include "lwip/apps/mdns.h"
@@ -28,6 +29,8 @@
 
 constexpr UBaseType_t STANDARD_TASK_PRIORITY = tskIDLE_PRIORITY + 1ul;
 constexpr UBaseType_t CONTROL_TASK_PRIORITY = tskIDLE_PRIORITY + 10ul;
+constexpr uint GPIO_POWER = 26;
+constexpr uint GPIO_MIN_CAP = 27;
 
 uint32_t time_s() { return time_us_64() / 1000000; }
 
@@ -55,18 +58,13 @@ void wifi_search_task(void *) {
         LogInfo("Wifi update loop");
         cur_time = time_s();
         uint32_t dt = cur_time - last_conn;
-        if ((dt > 30 && cur_time % 10 == 0) || // after 30 seconds only retry every 10 seconds
-            (dt > 20 && dt <= 30 && cur_time % 5 == 0) || // after 20 seconds only retry every 5 seconds
-            (dt > 10 && dt <= 20 && cur_time % 3 == 0) || // after 10 seconds only retry every 3 seconds
-            (dt <= 10))   // until 10 seconds retry every second
-            wifi_storage::Default().update_wifi_connection();
+        wifi_storage::Default().update_wifi_connection();
         if (wifi_storage::Default().wifi_connected)
             last_conn = cur_time;
         if (dt > ap_timeout) {
             access_point::Default().init();
             cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, cur_time & 1);
         } else {
-            access_point::Default().deinit();
             cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, wifi_storage::Default().wifi_connected);
         }
         wifi_storage::Default().update_hostname();
@@ -79,9 +77,32 @@ void wifi_search_task(void *) {
 
 void vebus_infos_task(void *) {
     LogInfo("Starting to monitor ve bus");
+    // note that all readout and setting of vebus information is done in webserver.h
     for (;;) {
         VEBus::Default().Maintain();
         vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+// reads out settings from adc
+float read_pot(uint gpio) {
+    adc_select_input(GPIO_POWER - ADC_BASE_PIN);
+    uint16_t adc = adc_read();
+    return adc / float(4096);
+}
+void victron_control_task(void *) {
+    adc_init();
+    adc_gpio_init(GPIO_POWER);
+    adc_gpio_init(GPIO_MIN_CAP);
+    float last_power = 0;
+
+    for (;;) {
+        settings::Default().local_w = read_pot(GPIO_POWER) * 6000;
+        settings::Default().local_min_soc = read_pot(GPIO_MIN_CAP) * 100;
+        if (!settings::Default().web_override && std::abs(settings::Default().local_w - last_power) > 100) {
+            VEBus::Default().SetPower(i16(-settings::Default().local_w));
+        }
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
 
@@ -101,17 +122,14 @@ void startup_task(void *) {
     Webserver().start();
     LogInfo("Ready, running http at {}", ip4addr_ntoa(netif_ip4_addr(netif_list)));
     VEBus::Default().Setup();
+    settings::Default();
     LogInfo("Initialization done");
     std::cout << "Initialization done, get all further info via the commands shown in 'help'\n";
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
-    TaskHandle_t task_usb_comm;
-    TaskHandle_t task_update_wifi;
-    auto err = xTaskCreate(usb_comm_task, "usb_comm", 512, NULL, 1, &task_usb_comm);	// usb task also has to be started only after cyw43 init as some wifi functions are available
-    if (err != pdPASS)
-        LogError("Failed to start usb communication task with code {}" ,err);
-    err = xTaskCreate(wifi_search_task, "UpdateWifiThread", 512, NULL, 1, &task_update_wifi);
-    if (err != pdPASS)
-        LogError("Failed to start usb communication task with code {}" ,err);
+
+    xTaskCreate(usb_comm_task, "UsbComm", 512, NULL, 1, NULL); // usb task also has to be started only after cyw43 init as some wifi functions are available
+    xTaskCreate(wifi_search_task, "UpdateWifiThread", 512, NULL, 1, NULL);
+    xTaskCreate(victron_control_task, "VictronControlThread", 512, NULL, 1, NULL);
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
     vebus_infos_task({});
 }

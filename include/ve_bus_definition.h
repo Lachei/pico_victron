@@ -160,6 +160,8 @@ namespace VEBusDefinition
         //(normal ON mode)
         ChargerInverter = 0x07
     };
+    constexpr int to_web_state(SwitchState state)  {return static_cast<int>(state) - static_cast<int>(SwitchState::Sleep);}
+    constexpr SwitchState from_web_state(int state)  {return static_cast<SwitchState>(state + static_cast<int>(SwitchState::Sleep));}
 
     enum ReceivedMessageType
     {
