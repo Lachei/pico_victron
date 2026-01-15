@@ -7,6 +7,7 @@
 #include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
+#include "hardware/watchdog.h"
 
 #include "lwip/ip4_addr.h"
 #include "lwip/apps/mdns.h"
@@ -79,6 +80,7 @@ void vebus_infos_task(void *) {
     LogInfo("Starting to monitor ve bus");
     // note that all readout and setting of vebus information is done in webserver.h
     for (;;) {
+        watchdog_update(); // the ve_bus task is most important
         VEBus::Default().Maintain();
         vTaskDelay(pdMS_TO_TICKS(10));
     }
@@ -140,6 +142,10 @@ int main( void )
 
     LogInfo("Starting FreeRTOS on all cores.");
     std::cout << "Starting FreeRTOS on all cores\n";
+
+    if (watchdog_enable_caused_reboot())
+        LogError("Rebooted by Watchdog!");
+    watchdog_enable(500000/*us*/, /*Stop on debug mode off*/0);
 
     TaskHandle_t task_startup;
     xTaskCreate(startup_task, "StartupThread", 512, NULL, 1, &task_startup);
