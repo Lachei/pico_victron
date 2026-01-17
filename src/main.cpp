@@ -44,6 +44,10 @@ void usb_comm_task(void *) {
     }
 }
 
+float soc_to_v(float soc, float min_v = settings::Default().bat_min_v, float max_v = settings::Default().bat_max_v) {
+    return (soc / 100) * (max_v - min_v) + min_v;
+}
+
 void wifi_search_task(void *) {
     LogInfo("Wifi task started");
     if (wifi_storage::Default().ssid_wifi.empty()) // onyl start the access point by default if no normal wifi connection is set
@@ -56,12 +60,13 @@ void wifi_search_task(void *) {
     uint32_t last_conn = cur_time;
 
     for (;;) {
-        LogInfo("Wifi update loop");
         cur_time = time_s();
         uint32_t dt = cur_time - last_conn;
         wifi_storage::Default().update_wifi_connection();
         if (wifi_storage::Default().wifi_connected)
             last_conn = cur_time;
+        if (dt % 30 == 5) // every 30 seconds enable reconnect try
+            wifi_storage::Default().wifi_changed = true;
         if (dt > ap_timeout) {
             access_point::Default().init();
             cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, cur_time & 1);
@@ -76,8 +81,8 @@ void wifi_search_task(void *) {
     }
 }
 
-void vebus_infos_task(void *) {
-    LogInfo("Starting to monitor ve bus");
+void vebus_comm_task(void *) {
+    LogInfo("Starting VEBus comm task");
     // note that all readout and setting of vebus information is done in webserver.h
     for (;;) {
         watchdog_update(); // the ve_bus task is most important
@@ -97,12 +102,49 @@ void victron_control_task(void *) {
     adc_gpio_init(GPIO_POWER);
     adc_gpio_init(GPIO_MIN_CAP);
     float last_power = 0;
+    SwitchState last_mode = SwitchState::Sleep;
+    settings &sets = settings::Default();
 
     for (;;) {
-        settings::Default().local_w = read_pot(GPIO_POWER) * 6000;
-        settings::Default().local_min_soc = read_pot(GPIO_MIN_CAP) * 100;
-        if (!settings::Default().web_override && std::abs(settings::Default().local_w - last_power) > 100) {
-            VEBus::Default().SetPower(i16(-settings::Default().local_w));
+        float cur_power; // negative for charging the battery, positive for discharging
+        SwitchState cur_mode;
+        float cur_bat_v = VEBus::Default().GetDcInfo().Voltage;
+        if (sets.web_override) {
+            cur_mode = from_web_state(sets.mode);
+            float max_v, min_v;
+            switch(cur_mode) {
+                case SwitchState::Sleep: break;
+                case SwitchState::ChargerOnly:
+                    max_v = sets.min_max_type == MIN_MAX_TYPE_SOC ? soc_to_v(sets.max_soc): sets.max_v;
+                    cur_power = cur_bat_v < max_v ? -sets.max_w: 0;
+                    break;
+                case SwitchState::InverterOnly:
+                    min_v = sets.min_max_type == MIN_MAX_TYPE_SOC ? soc_to_v(sets.min_soc): sets.min_v;
+                    cur_power = cur_bat_v > min_v ? -sets.min_w: 0;
+                    break;
+                case SwitchState::ChargerInverter:
+                    cur_power = sets.external_w;
+                    break;
+            }
+        }
+        if (!sets.web_override) {
+            sets.local_w = read_pot(GPIO_POWER) * 6000;
+            sets.local_min_v = soc_to_v(read_pot(GPIO_MIN_CAP) * 100);
+            if (cur_bat_v < sets.local_min_v) {
+                cur_power = -sets.local_w;
+                cur_mode = SwitchState::ChargerOnly;
+            } else {
+                cur_power = sets.external_w;
+                cur_mode = SwitchState::ChargerInverter;
+            }
+        }
+        if (cur_mode != last_mode) {
+            last_mode = cur_mode;
+            VEBus::Default().SetSwitch(cur_mode);
+        }
+        if (!sets.web_override && std::abs(sets.local_w - last_power) > 100) {
+            last_power = cur_power;
+            VEBus::Default().SetPower(i16(-sets.local_w));
         }
         vTaskDelay(pdMS_TO_TICKS(500));
     }
@@ -130,10 +172,11 @@ void startup_task(void *) {
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
     xTaskCreate(usb_comm_task, "UsbComm", 512, NULL, 1, NULL); // usb task also has to be started only after cyw43 init as some wifi functions are available
-    xTaskCreate(wifi_search_task, "UpdateWifiThread", 512, NULL, 1, NULL);
-    xTaskCreate(victron_control_task, "VictronControlThread", 512, NULL, 1, NULL);
+    xTaskCreate(wifi_search_task, "UpdateWifi", 512, NULL, 1, NULL);
+    xTaskCreate(vebus_comm_task, "VEBusComm", 512, NULL, 1, NULL);
+    xTaskCreate(victron_control_task, "VictronControl", 512, NULL, 1, NULL);
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
-    vebus_infos_task({});
+    vTaskDelete(NULL); // remove this task for efficiency reasions
 }
 
 int main( void )

@@ -43,7 +43,21 @@ async function sm() {
 	if (mm.selectedIndex === 0) {ss.style.display="block";vs.style.display="none";}
 	if (mm.selectedIndex === 1) {ss.style.display="none";vs.style.display="block";}
 }
+async function snyst() {
+	if(parent.p!="e"||!parent.lo)return;
+	let s = await(await fetch("/ui_settings")).json();
+	en(s.override);
+	t.selectedIndex=s.mode;
+	mm.selectedIndex=s.mmtype;
+	mins.value=s.mins;
+	maxs.value=s.maxs;
+	minv.value=s.minv;
+	maxv.value=s.maxv;
+	minw.value=s.minw;
+	maxw.value=s.maxw;
+}
 	en(false);
 	sm();
+	parent.m.e = snyst;
 	</script>
 </html>

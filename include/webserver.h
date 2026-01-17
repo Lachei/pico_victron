@@ -11,10 +11,11 @@
 #include "crypto_storage.h"
 #include "ntp_client.h"
 #include "ve_bus.h"
+#include "settings.h"
 
 std::string_view pb(bool b) { return b ? "true": "false"; }
 
-using tcp_server_typed = tcp_server<13, 5, 2, 0>;
+using tcp_server_typed = tcp_server<14, 5, 3, 0>;
 tcp_server_typed& Webserver() {
 	const auto get_ve_infos = [] (const tcp_server_typed::message_buffer &req, tcp_server_typed::message_buffer &res) {
 		res.res_set_status_line(HTTP_VERSION, STATUS_OK);
@@ -44,6 +45,24 @@ tcp_server_typed& Webserver() {
 		res.res_write_body("]");
 		if (0 == format_to_sv(length_hdr, "{}", res.body.size()))
 			LogError("Failed to write header length");
+	};
+	const auto get_ui_settings = [] (const tcp_server_typed::message_buffer &req, tcp_server_typed::message_buffer &res) {
+		res.res_set_status_line(HTTP_VERSION, STATUS_OK);
+		res.res_add_header("Server", "LacheiEmbed(josefstumpfegger@outlook.de)");
+		res.res_add_header("Content-Type", "application/json");
+		auto length_hdr = res.res_add_header("Content-Length", "        ").value; // at max 8 chars for size
+		res.res_write_body();
+		settings::Default().dump_to_json(res.buffer);
+		res.res_write_body();
+		if (0 == format_to_sv(length_hdr, "{}", res.body.size()))
+			LogError("Failed to write header length");
+	};
+	const auto put_ui_settings = [] (const tcp_server_typed::message_buffer &req, tcp_server_typed::message_buffer &res) {
+		res.res_set_status_line(HTTP_VERSION, STATUS_OK);
+		res.res_add_header("Server", "LacheiEmbed(josefstumpfegger@outlook.de)");
+		res.res_add_header("Content-Type", "text/plain");
+		res.res_add_header("Content-Length", "0");
+		settings::Default().parse_from_json(req.body);
 	};
 	const auto static_page_callback = [] (std::string_view page, std::string_view status, std::string_view type = "text/html") {
 		return [page, status, type](const tcp_server_typed::message_buffer &req, tcp_server_typed::message_buffer &res){
@@ -231,6 +250,7 @@ tcp_server_typed& Webserver() {
 		.port = 80,
 		.default_endpoint_cb = static_page_callback(_404_HTML, STATUS_NOT_FOUND),
 		.get_endpoints = {
+			tcp_server_typed::endpoint{{.path_match = true}, "/ui_settings", get_ui_settings},
 			tcp_server_typed::endpoint{{.path_match = true}, "/ve_infos", get_ve_infos},
 			// interactive endpoints
 			tcp_server_typed::endpoint{{.path_match = true}, "/logs", get_logs},
@@ -259,6 +279,7 @@ tcp_server_typed& Webserver() {
 		.put_endpoints = {
 			tcp_server_typed::endpoint{{.path_match = true}, "/set_password", set_password},
 			tcp_server_typed::endpoint{{.path_match = true}, "/time", set_time},
+			tcp_server_typed::endpoint{{.path_match = true}, "/ui_settings", put_ui_settings},
 		}
 	};
 	return webserver;

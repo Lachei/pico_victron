@@ -347,9 +347,9 @@ header tcp_server template_args_pure::message_buffer::res_add_header(std::string
 
 template template_args
 void tcp_server template_args_pure::message_buffer::res_write_body(std::string_view body) {
-	if (this->body.empty() && !on_stream_out)
+	if (!this->body.data() && !on_stream_out)
 		buffer.append("\r\n");
-	const char *s = this->body.empty() ? buffer.end(): this->body.begin();
+	const char *s = !this->body.data() ? buffer.end(): this->body.data();
 
 	for (int i = 0; i < 32 && body.size(); ++i) {
 		int append_size = body.size(); 
