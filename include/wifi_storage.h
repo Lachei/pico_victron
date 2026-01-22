@@ -21,6 +21,7 @@ struct wifi_storage {
 		[[maybe_unused]] static bool inited = [](){ storage.load_from_persistent_storage(); return true; }();
 		return storage;
 	}
+	uint32_t last_scanned{};
 	bool wifi_changed{true};
 	bool wifi_connected{false};
 	static_string<64> ssid_wifi{};
@@ -74,8 +75,11 @@ struct wifi_storage {
 	}
 	
 	void update_scanned() {
-		if (cyw43_wifi_scan_active(&cyw43_state))
+		uint32_t cur = time_us_64() / 1000000;
+		if (cyw43_wifi_scan_active(&cyw43_state) && last_scanned - cur < 10) // after 10 seconds forces rediscover
 			return;
+		vTaskDelay(pdMS_TO_TICKS(500)); // avoid back to back scanning
+		last_scanned = cur;
 		cyw43_wifi_scan_options_t scan_options = {0};
 		if (0 != cyw43_wifi_scan(&cyw43_state, &scan_options, NULL, _scan_result)) {
 			LogError("Failed wifi scan");

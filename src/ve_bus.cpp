@@ -63,7 +63,7 @@ std::string_view VEBusDefinition::to_sv(PhaseInfo phase) {
 	}
 }
 
-VEBus::VEBus(Serial& serial) : _serial(serial)
+VEBus::VEBus(Serial& serial) : serial(serial)
 {
 	_semaphoreDataFifo = xSemaphoreCreateMutex();
 	_semaphoreStatus = xSemaphoreCreateMutex();
@@ -659,6 +659,8 @@ ReceivedMessageType VEBus::decodeVEbusFrame(VEBusBuffer& buffer)
 	if ((buffer[2] == SYNC_FRAME) && (buffer.size() == 10) && (buffer[4] == SYNC_BYTE)) return ReceivedMessageType::sync;
 	if (buffer[2] != DATA_FRAME) return ReceivedMessageType::Unknown;
 
+	LogWarning("Retrieved data frame type: 0x{:x}", int(buffer[4]));
+
 	switch (buffer[4]) {
 	case 0x00:
 	{
@@ -873,14 +875,14 @@ void VEBus::commandHandling()
 	if (_communitationIsResumed)
 	{
 		_communitationIsResumed = false;
-		_serial.tx_flush();
+		serial.tx_flush();
 	}
 
-	if (!_serial.rx_available()) 
+	if (!serial.rx_available()) 
 		return;
 
-	while(_serial.rx_available()) {
-		char c = _serial.getc();
+	while(serial.rx_available()) {
+		char c = serial.getc();
 		_receiveBuffer.push(c);
 		if (c == END_OF_FRAME)
 			break;
@@ -897,7 +899,7 @@ void VEBus::commandHandling()
 	uint8_t frameNr = _receiveBuffer[3];
 	_receiveBuffer.clear();
 
-	// check for sync frame and frames have to be sent
+	// check for sync frame and frames are waiting to be sent
 	if (messageType != ReceivedMessageType::sync || _dataFifo.empty())
 		return;
 
@@ -926,10 +928,10 @@ void VEBus::sendData(VEBus::Data& data, uint8_t frameNr)
 	stuffingFAtoFF(sendData);
 	appendChecksum(sendData);
 
-	_serial.enable_send();
-	_serial.write(sendData.begin(), sendData.size());
-	_serial.tx_flush();
-	_serial.enable_receive();
+	serial.enable_send();
+	serial.write(sendData.begin(), sendData.size());
+	serial.tx_flush();
+	serial.enable_receive();
 
 	data.sentTimeMs = millis();
 	data.IsSent = true;

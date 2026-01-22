@@ -19,7 +19,12 @@
 			</div>
 		</div>
 		<p><label for="minw">Max Entladeleistung (W):</label><input id="minw" class="en" value="4000" onchange="ch();"><br>
-		<p><label for="minw">Max Ladeeistung (W):</label><input id="maxw" class="en" value="4000" onchange="ch();"><br>
+		<p><label for="maxw">Max Ladeeistung (W):</label><input id="maxw" class="en" value="4000" onchange="ch();"><br>
+		<p><label for="batminv">Min Batterie (V):</label><input id="batminv" value="46" onchange="ch();"><br>
+		<p><label for="batminv">Max Batterie (V):</label><input id="batmaxv" value="56" onchange="ch();"><br>
+		<hr>
+		<p><label for="localw">Drehpoti Leistung(w)</label><input id="localw" disabled value="0">
+		<p><label for="localv">Drehpoti Min Spannung(V)</label><input id="localv" disabled value="0">
 		<hr>
 		<h4>Passwort ändern</h4>
 		<p><input id="pw1" type="password"><label for="pw1">Passwort eingeben</label>
@@ -32,7 +37,7 @@ function en(e) {for (let c of document.getElementsByClassName("en")) if(e) c.dis
 async function sp(){if(pw1.value!=pw2.value)e.classList.remove("d");else {e.classList.add("d");await fetch("set_password",{method:"PUT",body:pw1.value});pw1.value=pw2.value="";}};
 async function ch(){
 	let ov= e.checked ? true: false;
-	let s={override:ov};
+	let s={override:ov,batminv:+batminv.value,batmaxv:+batmaxv.value};
 	if (ov) {
 		s.mode=t.selectedIndex, s.mmtype=mm.selectedIndex, s.mins=+mins.value, s.maxs=+maxs.value,
 		s.minv=+minv.value, s.maxv=+maxv.value, s.minw=-minw.value, s.maxw=+maxw.value;
@@ -46,6 +51,7 @@ async function sm() {
 async function snyst() {
 	if(parent.p!="e"||!parent.lo)return;
 	let s = await(await fetch("/ui_settings")).json();
+	e.checked = s.override;
 	en(s.override);
 	t.selectedIndex=s.mode;
 	mm.selectedIndex=s.mmtype;
@@ -55,6 +61,10 @@ async function snyst() {
 	maxv.value=s.maxv;
 	minw.value=s.minw;
 	maxw.value=s.maxw;
+	batminv.value=s.batminv;
+	batmaxv.value=s.batmaxv;
+	localw.value=s.localw;
+	localv.value=s.localminv;
 }
 	en(false);
 	sm();

@@ -53,8 +53,6 @@ void wifi_search_task(void *) {
     if (wifi_storage::Default().ssid_wifi.empty()) // onyl start the access point by default if no normal wifi connection is set
         access_point::Default().init();
 
-    wifi_storage::Default().update_hostname();
-
     constexpr uint32_t ap_timeout = 10;
     uint32_t cur_time = time_s();
     uint32_t last_conn = cur_time;
@@ -62,6 +60,7 @@ void wifi_search_task(void *) {
     for (;;) {
         cur_time = time_s();
         uint32_t dt = cur_time - last_conn;
+        wifi_storage::Default().update_hostname();
         wifi_storage::Default().update_wifi_connection();
         if (wifi_storage::Default().wifi_connected)
             last_conn = cur_time;
@@ -73,21 +72,30 @@ void wifi_search_task(void *) {
         } else {
             cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, wifi_storage::Default().wifi_connected);
         }
-        wifi_storage::Default().update_hostname();
         wifi_storage::Default().update_scanned();
         if (wifi_storage::Default().wifi_connected)
             ntp_client::Default().update_time();
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
-
+TaskHandle_t vebus_comm_task_handle{};
+void on_uart_receive() {
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        vTaskNotifyGiveFromISR(vebus_comm_task_handle, &xHigherPriorityTaskWoken);
+}
 void vebus_comm_task(void *) {
     LogInfo("Starting VEBus comm task");
+    vebus_comm_task_handle = xTaskGetCurrentTaskHandle();
+    VEBus::Default().serial.register_on_receive_callback(on_uart_receive);
+
     // note that all readout and setting of vebus information is done in webserver.h
     for (;;) {
-        watchdog_update(); // the ve_bus task is most important
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(250));
+        // give the uart 1ms to retrieve full frame (takes 1ms on average)
+        vTaskDelay(pdMS_TO_TICKS(1));
         VEBus::Default().Maintain();
-        vTaskDelay(pdMS_TO_TICKS(10));
+        watchdog_update(); // the ve_bus task is most important
+        vTaskDelay(pdMS_TO_TICKS(1)); // limiting the max amount fo executions to 500 Hz
     }
 }
 
@@ -106,8 +114,8 @@ void victron_control_task(void *) {
     settings &sets = settings::Default();
 
     for (;;) {
-        float cur_power; // negative for charging the battery, positive for discharging
-        SwitchState cur_mode;
+        float cur_power{}; // negative for charging the battery, positive for discharging
+        SwitchState cur_mode{SwitchState::Sleep};
         float cur_bat_v = VEBus::Default().GetDcInfo().Voltage;
         if (sets.web_override) {
             cur_mode = from_web_state(sets.mode);
@@ -141,10 +149,12 @@ void victron_control_task(void *) {
         if (cur_mode != last_mode) {
             last_mode = cur_mode;
             VEBus::Default().SetSwitch(cur_mode);
+            LogInfo("Switched mode to {:x}", (int)cur_mode);
         }
-        if (!sets.web_override && std::abs(sets.local_w - last_power) > 100) {
+        if (std::abs(cur_power - last_power) > 100) {
+            LogInfo("Set power to {}", cur_power);
             last_power = cur_power;
-            VEBus::Default().SetPower(i16(-sets.local_w));
+            VEBus::Default().SetPower(i16(cur_power));
         }
         vTaskDelay(pdMS_TO_TICKS(500));
     }
@@ -163,17 +173,20 @@ void startup_task(void *) {
         }
     }
     cyw43_arch_enable_sta_mode();
+    wifi_storage::Default().update_hostname();
+    wifi_storage::Default().update_scanned();
     Webserver().start();
     LogInfo("Ready, running http at {}", ip4addr_ntoa(netif_ip4_addr(netif_list)));
     VEBus::Default().Setup();
-    settings::Default();
+    persistent_storage_t::Default().read(&persistent_storage_layout::sets, settings::Default());
+    settings::Default().sanitize(); // will make sure that no garbage is loaded from storage
     LogInfo("Initialization done");
     std::cout << "Initialization done, get all further info via the commands shown in 'help'\n";
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
     xTaskCreate(usb_comm_task, "UsbComm", 512, NULL, 1, NULL); // usb task also has to be started only after cyw43 init as some wifi functions are available
     xTaskCreate(wifi_search_task, "UpdateWifi", 512, NULL, 1, NULL);
-    xTaskCreate(vebus_comm_task, "VEBusComm", 512, NULL, 1, NULL);
+    xTaskCreate(vebus_comm_task, "VEBusComm", 512, NULL, 8, NULL);
     xTaskCreate(victron_control_task, "VictronControl", 512, NULL, 1, NULL);
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
     vTaskDelete(NULL); // remove this task for efficiency reasions

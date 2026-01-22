@@ -116,7 +116,7 @@ struct VEBus
         VEBusBuffer responseData{};
     };
 
-    Serial& _serial;
+    Serial& serial;
     SemaphoreHandle_t _semaphoreDataFifo;
     SemaphoreHandle_t _semaphoreStatus;
     SemaphoreHandle_t _semaphoreReceiveData;

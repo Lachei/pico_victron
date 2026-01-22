@@ -50,7 +50,7 @@ struct headers {
 /** @brief Tcp server that serves text data according to path specification.
   * The returned content can be freely configured via callbacks via callbacks 
   * @note The tcp server instantly discards any connection after the response was sent.*/
-template<int get_size, int post_size, int put_size = 0, int delete_size = 0, int max_path_length = 256, int max_headers = 32, int buf_size = 4096, int message_buffers = 4>
+template<int get_size, int post_size, int put_size = 0, int delete_size = 0, int max_path_length = 256, int max_headers = 32, int buf_size = 4096, int message_buffers = 8>
 struct tcp_server {
 	/**
 	 * @brief Struct with a full http frame for both sending and recieving.
@@ -467,6 +467,8 @@ void tcp_server template_args_pure::process_request(uint32_t recieve_buffer_idx,
 	else
 		default_endpoint_cb(recieve_buffer, send_buffer);
 
+	if (!send_buffer.body.data())
+		send_buffer.res_write_body();
 	send_data(send_buffer.buffer.sv(), client);
 	recieve_buffer.clear();
 	send_buffer.clear();

@@ -62,7 +62,8 @@ tcp_server_typed& Webserver() {
 		res.res_add_header("Server", "LacheiEmbed(josefstumpfegger@outlook.de)");
 		res.res_add_header("Content-Type", "text/plain");
 		res.res_add_header("Content-Length", "0");
-		settings::Default().parse_from_json(req.body);
+		if (settings::Default().parse_from_json(req.body))
+			persistent_storage_t::Default().write(settings::Default(), &persistent_storage_layout::sets);
 	};
 	const auto static_page_callback = [] (std::string_view page, std::string_view status, std::string_view type = "text/html") {
 		return [page, status, type](const tcp_server_typed::message_buffer &req, tcp_server_typed::message_buffer &res){
@@ -78,7 +79,6 @@ tcp_server_typed& Webserver() {
 		res.res_add_header("Server", "LacheiEmbed(josefstumpfegger@outlook.de)");
 		res.res_add_header("WWW-Authenticate", static_format<128>(R"(Digest algorithm="{}",nonce="{:x}",realm="{}",qop="{}")", crypto_storage::algorithm, time_us_64(), crypto_storage::realm, crypto_storage::qop));
 		res.res_add_header("Content-Length", "0");
-		res.res_write_body();
 	};
 	const auto post_login = [&fill_unauthorized] (const tcp_server_typed::message_buffer &req, tcp_server_typed::message_buffer &res) {
 		std::string_view auth_header = req.headers_view.get_header("Authorization");

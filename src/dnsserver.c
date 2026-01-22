@@ -151,6 +151,7 @@ static void dns_server_process(void *arg, struct udp_pcb *upcb, struct pbuf *p, 
     const uint8_t *question_ptr_start = dns_msg + sizeof(dns_header_t);
     const uint8_t *question_ptr_end = dns_msg + msg_len;
     const uint8_t *question_ptr = question_ptr_start;
+    bool is_la_addr = false;
     while(question_ptr < question_ptr_end) {
         if (*question_ptr == 0) {
             question_ptr++;
@@ -158,6 +159,7 @@ static void dns_server_process(void *arg, struct udp_pcb *upcb, struct pbuf *p, 
         } else {
             if (question_ptr > question_ptr_start) {
                 DEBUG_printf(".");
+                is_la_addr |= question_ptr[1] == 'l' && question_ptr[2] == 'a';
             }
             int label_len = *question_ptr++;
             if (label_len > 63) {
@@ -173,6 +175,11 @@ static void dns_server_process(void *arg, struct udp_pcb *upcb, struct pbuf *p, 
     // Check question length
     if (question_ptr - question_ptr_start > 255) {
         DEBUG_printf("Invalid question length\n");
+        goto ignore_request;
+    }
+    // Check for lachei in name
+    if (!is_la_addr) {
+        DEBUG_printf("Missing la in dns request\n");
         goto ignore_request;
     }
 

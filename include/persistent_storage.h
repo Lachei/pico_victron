@@ -9,6 +9,7 @@
 
 #include "log_storage.h"
 #include "mutex.h"
+#include "settings.h"
 
 constexpr uint32_t FLASH_SIZE{PICO_FLASH_SIZE_BYTES};
 
@@ -17,6 +18,7 @@ constexpr uint32_t FLASH_SIZE{PICO_FLASH_SIZE_BYTES};
  * as the elements at the back of the layout always stay in the same position
  */
 struct persistent_storage_layout {
+	settings sets;
 	static_string<64> user_pwd;
 	static_string<64> hostname;
 	static_string<64> ssid_wifi;
@@ -158,34 +160,22 @@ struct persistent_storage {
 					.src_end = _write_buffer.data() + end_paged - start_paged, 
 					.dst_offset = start_paged};
 		// first erase as flash_range_program only allows to change 1s to 0s, but not the other way around
-		flash_safe_execute(_flash_erase, (void*)&write_data, UINT32_MAX);
-		flash_safe_execute(_flash_program, (void*)&write_data, UINT32_MAX);
+		err_t res = flash_safe_execute(_flash_erase, (void*)&write_data, 500);
+		if (res != PICO_OK)
+			return res;
+		res = flash_safe_execute(_flash_program, (void*)&write_data, 500);
+		if (res != PICO_OK)
+			return res;
 		return PICO_OK;
 	}
 	/*INTERNAL*/ static void __no_inline_not_in_flash_func(_flash_erase)(void *d) {
 		const _write_data &data = *reinterpret_cast<const _write_data*>(d);
 		const uint32_t write_size = data.src_end - data.src_start;
-		if (write_size % FLASH_SECTOR_SIZE != 0) {
-			LogError("_flash_erase(): write range must be a multiple of the FLASH_SECTOR_SIZE. Ignoreing write");
-			return;
-		}
-		if (write_size + data.dst_offset > FLASH_SIZE) {
-			LogError("_flash_erase(): write range overflows storage. Ignoring write.");
-			return;
-		}
 		flash_range_erase(data.dst_offset, write_size);
 	}
 	/*INTERNAL*/ static void __no_inline_not_in_flash_func(_flash_program)(void *d) {
 		const _write_data &data = *reinterpret_cast<const _write_data*>(d);
 		const uint32_t write_size = data.src_end - data.src_start;
-		if (write_size % FLASH_SECTOR_SIZE != 0) {
-			LogError("_flash_program(): write range must be a multiple of the FLASH_SECTOR_SIZE. Ignoreing write");
-			return;
-		}
-		if (write_size + data.dst_offset > FLASH_SIZE) {
-			LogError("_flash_program(): write range overflows storage. Ignoring write.");
-			return;
-		}
 		flash_range_program(data.dst_offset, reinterpret_cast<const uint8_t*>(data.src_start), write_size);
 	}
 };

@@ -10,8 +10,10 @@
 		<pre id="lv" style="overflow:scroll;font-size:50%"></pre>
 	</body>
 	<script>
-	async function m(){
-		if(parent.p!="u"||!parent.lo)return;
+	var mw=false;
+	async function m() {
+		if(parent.p!="u"||!parent.lo||mw)return;
+		mw=true;
 		let ms=await (await fetch("/ve_infos")).json();
 		let h="";
 		for (let e of ms) {
@@ -23,6 +25,7 @@
 			h += "</table></div>";
 		}
 		mv.innerHTML = h;
+		mw=false;
 	};
 	async function l(){
 		if(parent.p!="u"||!parent.lo)return;
@@ -32,7 +35,8 @@
 	};
 	window.onload = ()=>{
 		parent.m["u"]=l;
-		setInterval(m,1000);
+		m();
+		setInterval(m,3300);
 		setInterval(l,4000);
 	}
 	const sl=async()=>{await fetch("set_log_level",{method:"POST",body:ll.options[ll.selectedIndex].text});};

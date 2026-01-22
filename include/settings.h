@@ -11,6 +11,7 @@ std::string_view pb(bool b);
 constexpr int MIN_MAX_TYPE_SOC = 0;
 constexpr int MIN_MAX_TYPE_V = 0;
 
+
 struct settings {
 	bool web_override{};
 	int mode{}; // corresponds to VEBusDefinition::SwitchState, convert with from/to_web_state
@@ -30,6 +31,10 @@ struct settings {
 	static settings& Default() {
 		static settings s{};
 		return s;
+	}
+	constexpr void sanitize() {
+		if (bat_min_v < 5 || bat_min_v > 60 || bat_max_v < 5 || bat_max_v > 60)
+			*this = {}; // default init if something is whonky
 	}
 	/** @brief writes the settings struct as json to the static strig s */
 	template<int N>
