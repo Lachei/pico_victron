@@ -3,6 +3,7 @@
 #include <hardware/uart.h>
 #include <hardware/gpio.h>
 #include <functional>
+#include "pico/cyw43_arch.h"
 
 struct rs485_serial {
 	struct rs485_info {

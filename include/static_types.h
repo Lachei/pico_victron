@@ -76,6 +76,7 @@ struct static_vector {
 	constexpr bool resize(int size) { if(size > N || size < 0) return false; cur_size = size; return true; }
 	constexpr void clear() { cur_size = 0; }
 	constexpr bool empty() const { return cur_size == 0; }
+	constexpr bool full() const { return cur_size == N; }
 	constexpr int size() const { return cur_size; }
 	constexpr void sanitize() { if (cur_size > N || cur_size < 0) cur_size = 0; }
 };

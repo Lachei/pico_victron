@@ -62,8 +62,7 @@ tcp_server_typed& Webserver() {
 		res.res_add_header("Server", "LacheiEmbed(josefstumpfegger@outlook.de)");
 		res.res_add_header("Content-Type", "text/plain");
 		res.res_add_header("Content-Length", "0");
-		if (settings::Default().parse_from_json(req.body))
-			persistent_storage_t::Default().write(settings::Default(), &persistent_storage_layout::sets);
+		settings::Default().parse_from_json(req.body);
 	};
 	const auto static_page_callback = [] (std::string_view page, std::string_view status, std::string_view type = "text/html") {
 		return [page, status, type](const tcp_server_typed::message_buffer &req, tcp_server_typed::message_buffer &res){

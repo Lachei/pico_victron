@@ -13,6 +13,7 @@ constexpr int MIN_MAX_TYPE_V = 0;
 
 
 struct settings {
+	static bool changed;
 	bool web_override{};
 	int mode{}; // corresponds to VEBusDefinition::SwitchState, convert with from/to_web_state
 	int min_max_type{}; // 0 -> SOC, 1 -> V
@@ -99,9 +100,12 @@ struct settings {
 				break;
 			ASSERT_TRUE(try_parse_remove_json_sep(json));
 		}
+		changed = true;
 		return true;
 	}
 };
+
+bool settings::changed = false;
 
 /** @brief prints formatted for monospace output, eg. usb */
 std::ostream& operator<<(std::ostream &os, const settings &s) {

@@ -25,7 +25,7 @@ struct VEBus
         static VEBus ve_bus{serial};
         return ve_bus;
     }
-
+    static void DestuffingFAtoFF(VEBusBuffer& buffer);
 
     struct ResponseData
     {

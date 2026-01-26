@@ -37,15 +37,24 @@ float convertRamVarToValueSigned(RamVariables variable, int16_t rawValue, const 
 uint16_t convertSettingToRawValue(Settings setting, float value, const SettingInfos &settingInfoList);
 float convertSettingToValue(Settings setting, uint16_t rawValue, const SettingInfos &settingInfoList);
 
+TaskHandle_t vebus_comm_task_handle{};
+void on_uart_receive() {
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        vTaskNotifyGiveFromISR(vebus_comm_task_handle, &xHigherPriorityTaskWoken);
+	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
+}
+
 void VEBusDefinition::communication_task(void* handler_args)
 {
 	VEBus *ve_bus = static_cast<VEBus*>(handler_args);
+	vebus_comm_task_handle = xTaskGetCurrentTaskHandle();
+	// ve_bus->serial.register_on_receive_callback(on_uart_receive);
 
 	while (true)
 	{
+		// ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(20)); // wait at max 20ms
 		ve_bus->commandHandling();
-		//vTaskDelay(1 / portTICK_RATE_MS);
-		taskYIELD();
+		taskYIELD(); // allow other threads to continue some work
 	}
 }
 
@@ -77,7 +86,7 @@ VEBus::~VEBus()
 void VEBus::Setup(bool autostart)
 {
 	if (autostart) StartCommunication();
-	xTaskCreate(communication_task, "vebus_task", 4096, this, 1, NULL);
+	xTaskCreate(communication_task, "vebus_task", 4096, this, 8, NULL);
 }
 
 void VEBus::Maintain()
@@ -85,7 +94,7 @@ void VEBus::Maintain()
 	checkResponseTimeout();
 	checkResponseMessage();
 
-	xSemaphoreTake(_semaphoreReceiveData, portMAX_DELAY);
+	xSemaphoreTake(_semaphoreReceiveData, VEBUS_MAX_SEM_DELAY);
 	if (receive_cb)
 		for (VEBusBuffer &d: _receiveBufferList)
 			receive_cb(d);
@@ -278,7 +287,7 @@ bool VEBus::NewMasterMultiLedAvailable()
 MasterMultiLed VEBus::GetMasterMultiLed()
 {
 	MasterMultiLed multiLed;
-	xSemaphoreTake(_semaphoreStatus, portMAX_DELAY);
+	xSemaphoreTake(_semaphoreStatus, VEBUS_MAX_SEM_DELAY);
 	_masterMultiLedNewData = false;
 	multiLed = _masterMultiLed;
 	xSemaphoreGive(_semaphoreStatus);
@@ -294,7 +303,7 @@ bool VEBus::NewMultiPlusStatusAvailable()
 MultiPlusStatus VEBus::GetMultiPlusStatus()
 {
 	MultiPlusStatus multiStatus;
-	xSemaphoreTake(_semaphoreStatus, portMAX_DELAY);
+	xSemaphoreTake(_semaphoreStatus, VEBUS_MAX_SEM_DELAY);
 	_multiPlusStatusNewData = false;
 	multiStatus = _multiPlusStatus;
 	xSemaphoreGive(_semaphoreStatus);
@@ -310,7 +319,7 @@ bool VEBus::NewDcInfoAvailable()
 DcInfo VEBus::GetDcInfo()
 {
 	DcInfo info;
-	xSemaphoreTake(_semaphoreStatus, portMAX_DELAY);
+	xSemaphoreTake(_semaphoreStatus, VEBUS_MAX_SEM_DELAY);
 	_dcInfo.newInfo = false;
 	info = _dcInfo;
 	xSemaphoreGive(_semaphoreStatus);
@@ -320,7 +329,7 @@ DcInfo VEBus::GetDcInfo()
 AcInfo VEBus::GetAcInfo(uint8_t type)
 {
 	AcInfo info;
-	xSemaphoreTake(_semaphoreStatus, portMAX_DELAY);
+	xSemaphoreTake(_semaphoreStatus, VEBUS_MAX_SEM_DELAY);
 	info = _acInfo[PhaseToIdx(PhaseInfo(type))];
 	_acInfo[PhaseToIdx(PhaseInfo(type))].newInfo = false;
 	xSemaphoreGive(_semaphoreStatus);
@@ -367,7 +376,7 @@ uint8_t VEBus::CommandReadDeviceState()
 
 void VEBus::addOrUpdateFifo(const Data &data, bool updateIfExist)
 {
-	xSemaphoreTake(_semaphoreDataFifo, portMAX_DELAY);
+	xSemaphoreTake(_semaphoreDataFifo, VEBUS_MAX_SEM_DELAY);
 	if (updateIfExist)
 	{
 		for (auto& element : _dataFifo) {
@@ -532,7 +541,7 @@ void stuffingFAtoFF(VEBusBuffer& buffer)
 	}
 }
 
-void DestuffingFAtoFF(VEBusBuffer& buffer)
+void VEBus::DestuffingFAtoFF(VEBusBuffer& buffer)
 {
 	if (buffer.empty())
 		return;
@@ -656,16 +665,15 @@ ReceivedMessageType VEBus::decodeVEbusFrame(VEBusBuffer& buffer)
 {
 	ReceivedMessageType result = ReceivedMessageType::Unknown;
 	if ((buffer[0] != MP_ID_0) || (buffer[1] != MP_ID_1)) return ReceivedMessageType::Unknown;
+	LogWarning("Retrieved data frame type: 0x{:x}", int(buffer[4]));
 	if ((buffer[2] == SYNC_FRAME) && (buffer.size() == 10) && (buffer[4] == SYNC_BYTE)) return ReceivedMessageType::sync;
 	if (buffer[2] != DATA_FRAME) return ReceivedMessageType::Unknown;
-
-	LogWarning("Retrieved data frame type: 0x{:x}", int(buffer[4]));
 
 	switch (buffer[4]) {
 	case 0x00:
 	{
 		if (buffer.size() < 6) return ReceivedMessageType::Unknown;
-		xSemaphoreTake(_semaphoreDataFifo, portMAX_DELAY);
+		xSemaphoreTake(_semaphoreDataFifo, VEBUS_MAX_SEM_DELAY);
 		for (uint8_t i = 0; i < _dataFifo.size(); i++)
 		{
 			if (_dataFifo[i].id != buffer[5]) continue;
@@ -707,7 +715,13 @@ ReceivedMessageType VEBus::decodeVEbusFrame(VEBusBuffer& buffer)
 	}
 	case 0xE4:
 	{
-		if (buffer.size() == 21) result = ReceivedMessageType::AcPhaseInformation;
+		if (buffer.size() != 21) break; 
+		result = ReceivedMessageType::AcPhaseInformation;
+		uint16_t ut = ((buffer[17] & 0x0F)<<8) + buffer[16];
+		xSemaphoreTake(_semaphoreStatus, VEBUS_MAX_SEM_DELAY);
+		_dcInfo.newInfo = true;
+		_dcInfo.Voltage = ut / 50.0;
+		xSemaphoreGive(_semaphoreStatus);
 		break;
 	}
 	}
@@ -721,7 +735,7 @@ void VEBus::decodeChargerInverterCondition(VEBusBuffer& buffer)
 	{
 		if (_masterMultiLed.LowBattery != (buffer[7] == LOW_BATTERY))
 		{
-			xSemaphoreTake(_semaphoreStatus, portMAX_DELAY);
+			xSemaphoreTake(_semaphoreStatus, VEBUS_MAX_SEM_DELAY);
 			_masterMultiLed.LowBattery = (buffer[7] == LOW_BATTERY);
 			_masterMultiLedNewData = true;
 			_masterMultiLedLogged = false;
@@ -741,7 +755,7 @@ void VEBus::decodeChargerInverterCondition(VEBusBuffer& buffer)
 
 		if (newValue)
 		{
-			xSemaphoreTake(_semaphoreStatus, portMAX_DELAY);
+			xSemaphoreTake(_semaphoreStatus, VEBUS_MAX_SEM_DELAY);
 			_multiPlusStatus.DcLevelAllowsInverting = dcLevelAllowsInverting;
 			_multiPlusStatus.DcCurrentA = dcCurrentA;
 			_multiPlusStatusNewData = true;
@@ -759,7 +773,7 @@ void VEBus::decodeBatteryCondition(VEBusBuffer& buffer)
 		float multiplusAh = (((uint16_t)buffer[11] << 8) | buffer[10]);
 		if (multiplusAh != _multiPlusStatus.BatterieAh)
 		{
-			xSemaphoreTake(_semaphoreStatus, portMAX_DELAY);
+			xSemaphoreTake(_semaphoreStatus, VEBUS_MAX_SEM_DELAY);
 			_multiPlusStatus.BatterieAh = multiplusAh;
 			_multiPlusStatusNewData = true;
 			_multiPlusStatusLogged = false;
@@ -794,7 +808,7 @@ void VEBus::decodeMasterMultiLed(VEBusBuffer& buffer)
 
 	if (newValue)
 	{
-		xSemaphoreTake(_semaphoreStatus, portMAX_DELAY);
+		xSemaphoreTake(_semaphoreStatus, VEBUS_MAX_SEM_DELAY);
 		_masterMultiLed.LEDon.value = lEDon.value;
 		_masterMultiLed.LEDblink.value = lEDblink.value;
 		_masterMultiLed.LowBattery = lowBattery;
@@ -838,7 +852,7 @@ void VEBus::decodeInfoFrame(VEBusBuffer &buffer)
 		if (info == ac_entry)
 			return;
 		ac_entry.newInfo = true;
-		xSemaphoreTake(_semaphoreStatus, portMAX_DELAY);
+		xSemaphoreTake(_semaphoreStatus, VEBUS_MAX_SEM_DELAY);
 		ac_entry = info;
 		xSemaphoreGive(_semaphoreStatus);
 		break;
@@ -853,7 +867,7 @@ void VEBus::decodeInfoFrame(VEBusBuffer &buffer)
 
 		if (info == _dcInfo) break;
 		info.newInfo = true;
-		xSemaphoreTake(_semaphoreStatus, portMAX_DELAY);
+		xSemaphoreTake(_semaphoreStatus, VEBUS_MAX_SEM_DELAY);
 		_dcInfo = info;
 		xSemaphoreGive(_semaphoreStatus);
 		break;
@@ -861,7 +875,7 @@ void VEBus::decodeInfoFrame(VEBusBuffer &buffer)
 	default:
 		break;
 	}
-	xSemaphoreTake(_semaphoreStatus, portMAX_DELAY);
+	xSemaphoreTake(_semaphoreStatus, VEBUS_MAX_SEM_DELAY);
 
 	xSemaphoreGive(_semaphoreStatus);
 }
@@ -883,6 +897,8 @@ void VEBus::commandHandling()
 
 	while(serial.rx_available()) {
 		char c = serial.getc();
+		if (_receiveBuffer.full())
+			_receiveBuffer.clear();
 		_receiveBuffer.push(c);
 		if (c == END_OF_FRAME)
 			break;
@@ -890,7 +906,7 @@ void VEBus::commandHandling()
 	if (*_receiveBuffer.back() != END_OF_FRAME) 
 		return;
 
-	xSemaphoreTake(_semaphoreReceiveData, portMAX_DELAY);
+	xSemaphoreTake(_semaphoreReceiveData, VEBUS_MAX_SEM_DELAY);
 	_receiveBufferList.push(_receiveBuffer);
 	xSemaphoreGive(_semaphoreReceiveData);
 
@@ -904,7 +920,7 @@ void VEBus::commandHandling()
 		return;
 
 	// we can now transmit a request that was not yet sent
-	xSemaphoreTake(_semaphoreDataFifo, portMAX_DELAY);
+	xSemaphoreTake(_semaphoreDataFifo, VEBUS_MAX_SEM_DELAY);
 	Data* data{};
 	for (Data &d: _dataFifo) {
 		if (!d.IsSent) {
@@ -940,8 +956,9 @@ void VEBus::sendData(VEBus::Data& data, uint8_t frameNr)
 
 void VEBus::checkResponseMessage()
 {
-	Data *data{};
-	xSemaphoreTake(_semaphoreDataFifo, portMAX_DELAY);
+	Data data{};
+	bool got_response{};
+	xSemaphoreTake(_semaphoreDataFifo, VEBUS_MAX_SEM_DELAY);
 	for (int i = _dataFifo.back_idx(); i >= 0; --i)
 	{
 		if (_dataFifo[i].responseData.size() == 0)
@@ -949,8 +966,9 @@ void VEBus::checkResponseMessage()
 
 		if (_dataFifo[i].responseData[6] == _dataFifo[i].expectedResponseCode)
 		{
-			std::swap(_dataFifo[i], *_dataFifo.back()); // swap to ensure sent data is removed
-			data = _dataFifo.pop(); // erase last element and get pointer
+			data = _dataFifo[i];
+			_dataFifo[i] = *_dataFifo.pop();
+			got_response = true;
 			break;
 		}
 
@@ -967,8 +985,8 @@ void VEBus::checkResponseMessage()
 	}
 	xSemaphoreGive(_semaphoreDataFifo);
 
-	if (data) 
-		saveResponseData(*data);
+	if (got_response) 
+		saveResponseData(data);
 }
 
 void VEBus::saveResponseData(const Data &data)
@@ -1123,7 +1141,7 @@ void VEBus::saveRamVarInfoData(const Data& data)
 void VEBus::checkResponseTimeout()
 {
 
-	xSemaphoreTake(_semaphoreDataFifo, portMAX_DELAY);
+	xSemaphoreTake(_semaphoreDataFifo, VEBUS_MAX_SEM_DELAY);
 	if (_dataFifo.empty()) {
 		xSemaphoreGive(_semaphoreDataFifo);
 		return;

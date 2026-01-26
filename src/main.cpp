@@ -78,24 +78,14 @@ void wifi_search_task(void *) {
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
-TaskHandle_t vebus_comm_task_handle{};
-void on_uart_receive() {
-        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        vTaskNotifyGiveFromISR(vebus_comm_task_handle, &xHigherPriorityTaskWoken);
-}
 void vebus_comm_task(void *) {
-    LogInfo("Starting VEBus comm task");
-    vebus_comm_task_handle = xTaskGetCurrentTaskHandle();
-    VEBus::Default().serial.register_on_receive_callback(on_uart_receive);
+    LogInfo("Starting VEBus comm monitor task");
 
     // note that all readout and setting of vebus information is done in webserver.h
     for (;;) {
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(250));
-        // give the uart 1ms to retrieve full frame (takes 1ms on average)
-        vTaskDelay(pdMS_TO_TICKS(1));
+        watchdog_update(); 
         VEBus::Default().Maintain();
-        watchdog_update(); // the ve_bus task is most important
-        vTaskDelay(pdMS_TO_TICKS(1)); // limiting the max amount fo executions to 500 Hz
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
@@ -109,11 +99,17 @@ void victron_control_task(void *) {
     adc_init();
     adc_gpio_init(GPIO_POWER);
     adc_gpio_init(GPIO_MIN_CAP);
-    float last_power = 0;
-    SwitchState last_mode = SwitchState::Sleep;
     settings &sets = settings::Default();
+    sets.external_w = 0;
 
     for (;;) {
+        if (settings::changed)
+		persistent_storage_t::Default().write(sets, &persistent_storage_layout::sets);
+        settings::changed = false;
+
+        sets.local_w = read_pot(GPIO_POWER) * 6000;
+        sets.local_min_v = soc_to_v(read_pot(GPIO_MIN_CAP) * 100);
+
         float cur_power{}; // negative for charging the battery, positive for discharging
         SwitchState cur_mode{SwitchState::Sleep};
         float cur_bat_v = VEBus::Default().GetDcInfo().Voltage;
@@ -136,26 +132,19 @@ void victron_control_task(void *) {
             }
         }
         if (!sets.web_override) {
-            sets.local_w = read_pot(GPIO_POWER) * 6000;
-            sets.local_min_v = soc_to_v(read_pot(GPIO_MIN_CAP) * 100);
             if (cur_bat_v < sets.local_min_v) {
                 cur_power = -sets.local_w;
-                cur_mode = SwitchState::ChargerOnly;
+                cur_mode = SwitchState::ChargerInverter;
             } else {
                 cur_power = sets.external_w;
                 cur_mode = SwitchState::ChargerInverter;
             }
         }
-        if (cur_mode != last_mode) {
-            last_mode = cur_mode;
-            VEBus::Default().SetSwitch(cur_mode);
-            LogInfo("Switched mode to {:x}", (int)cur_mode);
-        }
-        if (std::abs(cur_power - last_power) > 100) {
-            LogInfo("Set power to {}", cur_power);
-            last_power = cur_power;
-            VEBus::Default().SetPower(i16(cur_power));
-        }
+
+        LogInfo("Switch mode to {:x}", (int)cur_mode);
+        VEBus::Default().SetSwitch(cur_mode);
+        LogInfo("Set power to {}", cur_power);
+        VEBus::Default().SetPower(i16(cur_power));
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
@@ -177,7 +166,7 @@ void startup_task(void *) {
     wifi_storage::Default().update_scanned();
     Webserver().start();
     LogInfo("Ready, running http at {}", ip4addr_ntoa(netif_ip4_addr(netif_list)));
-    VEBus::Default().Setup();
+    VEBus::Default().Setup(); // creates a separate thread
     persistent_storage_t::Default().read(&persistent_storage_layout::sets, settings::Default());
     settings::Default().sanitize(); // will make sure that no garbage is loaded from storage
     LogInfo("Initialization done");
@@ -186,8 +175,8 @@ void startup_task(void *) {
 
     xTaskCreate(usb_comm_task, "UsbComm", 512, NULL, 1, NULL); // usb task also has to be started only after cyw43 init as some wifi functions are available
     xTaskCreate(wifi_search_task, "UpdateWifi", 512, NULL, 1, NULL);
-    xTaskCreate(vebus_comm_task, "VEBusComm", 512, NULL, 8, NULL);
-    xTaskCreate(victron_control_task, "VictronControl", 512, NULL, 1, NULL);
+    xTaskCreate(vebus_comm_task, "VEBusComm", 2048, NULL, 8, NULL);
+    xTaskCreate(victron_control_task, "VictronControl", 2048, NULL, 8, NULL);
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
     vTaskDelete(NULL); // remove this task for efficiency reasions
 }
@@ -201,7 +190,8 @@ int main( void )
 
     if (watchdog_enable_caused_reboot())
         LogError("Rebooted by Watchdog!");
-    watchdog_enable(500000/*us*/, /*Stop on debug mode off*/0);
+    watchdog_start_tick(15); // set tick divider to 150 Mhz
+    watchdog_enable(5000/*ms*/, /*Stop on debug mode off*/0);
 
     TaskHandle_t task_startup;
     xTaskCreate(startup_task, "StartupThread", 512, NULL, 1, &task_startup);
