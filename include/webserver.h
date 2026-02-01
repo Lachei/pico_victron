@@ -12,6 +12,7 @@
 #include "ntp_client.h"
 #include "ve_bus.h"
 #include "settings.h"
+#include "measurements.h"
 
 std::string_view pb(bool b) { return b ? "true": "false"; }
 
@@ -23,6 +24,11 @@ tcp_server_typed& Webserver() {
 		res.res_add_header("Content-Type", "text/plain");
 		auto length_hdr = res.res_add_header("Content-Length", "        ").value; // at max 8 chars for size
 		res.res_write_body("["); // add header end sequence, start array of infos
+		measurements &m = measurements::Default();
+		res.buffer.append_formatted("{{\"name\":\"Letzte Ladungen\",\"Letzte Ladezeit\":{}, \"Ladungen\":[", m.last_load_time);
+		for (const float &energy: m.energy_values)
+			res.buffer.append_formatted("{}{}", (&energy == &*m.energy_values.begin()? ' ': ','), energy);
+		res.res_write_body("]},");
 		MasterMultiLed led = VEBus::Default().GetMasterMultiLed();
 		res.buffer.append_formatted("{{\"name\":\"Led Infos\",\"MainsOn\":{},\"AbsorptionOn\":{},\"BulkOn\":{},\"FloatOn\":{},\"InverterOn\":{},\"OverloadOn\":{},\"LowBatteryOn\":{},\"TemperatureOn\":{},\"MainsBlink\":{},\"AbsorptionBlink\":{},\"BulkBlink\":{},\"FloatBlink\":{},\"InverterBlink\":{},\"OverloadBlink\":{},\"LowBatteryBlink\":{},\"TemperatureBlink\":{},\"LowBattery\":{},\"AcInputConfiguration\":{},\"MinimumInputCurrentLimitA\":{},\"MaximumInputCurrentLimitA\":{},\"ActualInputCurrentLimitA\":{},\"SwitchRegister\":{} }},\n", 
 			      pb(led.LEDon.MainsOn), pb(led.LEDon.Absorption), pb(led.LEDon.Bulk), pb(led.LEDon.Float), pb(led.LEDon.InverterOn), pb(led.LEDon.Overload), pb(led.LEDon.LowBattery), pb(led.LEDon.Temperature),

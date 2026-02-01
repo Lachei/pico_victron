@@ -4,23 +4,25 @@
 
 #include "static_types.h"
 
+
 struct measurements {
-	float i_low{};
+	static_ring_buffer<float, 32> energy_values{};
+	uint32_t last_load_time{};
 
 	static measurements& Default() {
 		static measurements m{};
 		return m;
 	}
-	/** @brief writes the measurements struct as json to the static string */
-	template<int N>
-	constexpr void dump_to_json(static_string<N> &s) const {
-		s.append_formatted(R"({{"i_low":{}}})", i_low);
-	}
 };
 
 /** @brief prints formatted for monospace output, eg. usb */
 std::ostream& operator<<(std::ostream &os, const measurements &m) {
-	os << "i_low:    " << m.i_low << '\n';
+	os << "last_load_tim: " << m.last_load_time << '\n';
+	os << "energy_values: [";
+	for (const float &value: m.energy_values)
+		os << (&value == &*m.energy_values.begin()? ' ': ',') << value;
+	os << "]\n";
+
 	return os;
 }
 

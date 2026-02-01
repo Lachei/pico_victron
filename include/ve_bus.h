@@ -144,7 +144,7 @@ struct VEBus
     void addOrUpdateFifo(const Data &data, bool updateIfExist = true);
 
 
-    bool getNextFreeId_1(uint8_t id);
+    bool getNextFreeId_1(uint8_t &id);
 
     ReceivedMessageType decodeVEbusFrame(VEBusBuffer &buffer);
     void decodeChargerInverterCondition(VEBusBuffer &buffer); //0x80
@@ -154,7 +154,8 @@ struct VEBus
 
     void saveSettingInfoData(const Data& data);
     void saveRamVarInfoData(const Data& data);
-    void commandHandling();
+    // returns true if command handling is done (a full frame was processed and no waiting receive)
+    bool commandHandling();
 
     void sendData(VEBus::Data& data, uint8_t frameNr);
     void saveResponseData(const Data &data);

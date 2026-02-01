@@ -38,7 +38,9 @@ uint16_t convertSettingToRawValue(Settings setting, float value, const SettingIn
 float convertSettingToValue(Settings setting, uint16_t rawValue, const SettingInfos &settingInfoList);
 
 TaskHandle_t vebus_comm_task_handle{};
+Serial *serial{};
 void on_uart_receive() {
+	serial->enable_receive_callback(false);
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
         vTaskNotifyGiveFromISR(vebus_comm_task_handle, &xHigherPriorityTaskWoken);
 	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
@@ -48,13 +50,15 @@ void VEBusDefinition::communication_task(void* handler_args)
 {
 	VEBus *ve_bus = static_cast<VEBus*>(handler_args);
 	vebus_comm_task_handle = xTaskGetCurrentTaskHandle();
-	// ve_bus->serial.register_on_receive_callback(on_uart_receive);
+	serial = &ve_bus->serial;
+	ve_bus->serial.register_on_receive_callback(on_uart_receive);
 
 	while (true)
 	{
-		// ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(20)); // wait at max 20ms
-		ve_bus->commandHandling();
-		taskYIELD(); // allow other threads to continue some work
+		ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(20)); // wait at max 20ms for new packet
+		while (!ve_bus->commandHandling() || serial->rx_available()) // processing is done for as long as the commandHandling is not yet done
+			taskYIELD(); // allow other threads to continue some work
+		serial->enable_receive_callback(true); // only after command handling is done re-enable the interrupt
 	}
 }
 
@@ -185,6 +189,10 @@ VEBus::RequestResult VEBus::WriteViaID(Settings setting, val_var value, bool eep
 	return { data.id , RequestError::Success };
 }
 
+// void log_buffer(const VEBusBuffer &buffer) {
+// 	int i = 0;
+// 	LogFatal("buffer(:8): {:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}, {:02x}", buffer.storage[i++], buffer.storage[i++], buffer.storage[i++], buffer.storage[i++], buffer.storage[i++], buffer.storage[i++], buffer.storage[i++], buffer.storage[i++]);
+// }
 VEBus::RequestResult VEBus::SetPower(i16 power_w)
 {
 	uint8_t lowByte = power_w & 0xff;
@@ -384,21 +392,27 @@ void VEBus::addOrUpdateFifo(const Data &data, bool updateIfExist)
 			if (element.address == data.address && element.command == data.command)
 			{
 				element = data;
-				element.responseData.clear();
 				element.sentTimeMs = millis();
+				element.IsSent = false;
 				xSemaphoreGive(_semaphoreDataFifo);
+				LogInfo("Updated data in fifo[{}]", _dataFifo.size());
 				return;
 			}
 		}
 	}
 	
-	_dataFifo.push(data);
+	if (_dataFifo.push(data)) {
+		_dataFifo.back()->responseData.clear();
+		_dataFifo.back()->sentTimeMs = millis();
+		LogInfo("Added data to fifo[{}]", _dataFifo.size());
+	} else
+		LogError("Failed to add request");
 	xSemaphoreGive(_semaphoreDataFifo);
 }
 
 //possible ID_1 between 0x80 and 0xFF (0xE4-0xE7 used from Venus OS)
 //* return false if no ID free
-bool VEBus::getNextFreeId_1(uint8_t id)
+bool VEBus::getNextFreeId_1(uint8_t &id)
 {
 	bool idUsed = false;
 	for (uint8_t i = 0; i < 127; i++)
@@ -543,25 +557,23 @@ void stuffingFAtoFF(VEBusBuffer& buffer)
 
 void VEBus::DestuffingFAtoFF(VEBusBuffer& buffer)
 {
-	if (buffer.empty())
+	if (buffer.size() <= 4)
 		return;
 
 	uint32_t fas{};
-	for (uint8_t v: buffer)
-		if (v == 0xFA)
-			++fas;
-
-	if (*buffer.back() == 0xFA)
-		--fas;
-
-	for (uint8_t *src = buffer.back(), *dst = dst - fas; src && src >= buffer.begin(); --dst)
+	for (uint8_t *src = buffer.begin() + 4, *dst = src; src && src < buffer.end(); ++dst)
 	{
-		if (src != buffer.begin() && *(src - 1) == 0xFA)
-		{
-			*dst = 0x80 + *src;
-			src -= 2;
+		if (*src == 0xFA) {
+			if (src[1] == 0xFF) {
+				*dst++ = 0xFA;
+				*dst = 0xFF;
+			} else {
+				*dst = 0x80 + src[1];
+				++fas;
+			}
+			src += 2;
 		} else
-			*dst = *src--;
+			*dst = *src++;
 	}
 	std::ignore = buffer.resize(buffer.size() - fas);
 }
@@ -665,7 +677,7 @@ ReceivedMessageType VEBus::decodeVEbusFrame(VEBusBuffer& buffer)
 {
 	ReceivedMessageType result = ReceivedMessageType::Unknown;
 	if ((buffer[0] != MP_ID_0) || (buffer[1] != MP_ID_1)) return ReceivedMessageType::Unknown;
-	LogWarning("Retrieved data frame type: 0x{:x}", int(buffer[4]));
+	LogWarning("Retrieved data frame type: 0x{:02x}", int(buffer[4]));
 	if ((buffer[2] == SYNC_FRAME) && (buffer.size() == 10) && (buffer[4] == SYNC_BYTE)) return ReceivedMessageType::sync;
 	if (buffer[2] != DATA_FRAME) return ReceivedMessageType::Unknown;
 
@@ -676,6 +688,7 @@ ReceivedMessageType VEBus::decodeVEbusFrame(VEBusBuffer& buffer)
 		xSemaphoreTake(_semaphoreDataFifo, VEBUS_MAX_SEM_DELAY);
 		for (uint8_t i = 0; i < _dataFifo.size(); i++)
 		{
+			LogWarning("Got a response for a message");
 			if (_dataFifo[i].id != buffer[5]) continue;
 			_dataFifo[i].responseData = buffer;
 			break;
@@ -744,7 +757,7 @@ void VEBus::decodeChargerInverterCondition(VEBusBuffer& buffer)
 		}
 
 		bool dcLevelAllowsInverting = (buffer[6] & 0x01);
-		float dcCurrentA = (((uint16_t)buffer[10] << 8) | buffer[9]) / 10.0f;
+		float dcCurrentA = int16_t(((uint16_t)buffer[10] << 8) | buffer[9]) / 10.0f;
 		float temp = 0;
 		if ((buffer[11] & 0xF0) == 0x30) temp = buffer[15] / 10.0f;
 
@@ -881,10 +894,10 @@ void VEBus::decodeInfoFrame(VEBusBuffer &buffer)
 }
 
 //Runs on core 0
-void VEBus::commandHandling()
+bool VEBus::commandHandling()
 {
 	if (!_communitationIsRunning) 
-		return;
+		return true;
 
 	if (_communitationIsResumed)
 	{
@@ -893,7 +906,7 @@ void VEBus::commandHandling()
 	}
 
 	if (!serial.rx_available()) 
-		return;
+		return false;
 
 	while(serial.rx_available()) {
 		char c = serial.getc();
@@ -904,7 +917,7 @@ void VEBus::commandHandling()
 			break;
 	}
 	if (*_receiveBuffer.back() != END_OF_FRAME) 
-		return;
+		return false;
 
 	xSemaphoreTake(_semaphoreReceiveData, VEBUS_MAX_SEM_DELAY);
 	_receiveBufferList.push(_receiveBuffer);
@@ -917,7 +930,7 @@ void VEBus::commandHandling()
 
 	// check for sync frame and frames are waiting to be sent
 	if (messageType != ReceivedMessageType::sync || _dataFifo.empty())
-		return;
+		return true;
 
 	// we can now transmit a request that was not yet sent
 	xSemaphoreTake(_semaphoreDataFifo, VEBUS_MAX_SEM_DELAY);
@@ -928,6 +941,7 @@ void VEBus::commandHandling()
 			break;
 		}
 	}
+
 	if (data)
 		sendData(*data, frameNr);
 
@@ -935,6 +949,7 @@ void VEBus::commandHandling()
 		*data = *_dataFifo.pop();
 
 	xSemaphoreGive(_semaphoreDataFifo);
+	return true;
 }
 
 void VEBus::sendData(VEBus::Data& data, uint8_t frameNr)
@@ -969,14 +984,17 @@ void VEBus::checkResponseMessage()
 			data = _dataFifo[i];
 			_dataFifo[i] = *_dataFifo.pop();
 			got_response = true;
+			LogInfo("Got expeted response");
 			break;
 		}
 
 		if (_dataFifo[i].resendCount >= VEBUS_MAX_RESEND) {
 			_dataFifo[i] = *_dataFifo.pop();
+			LogError("resend count reached, removing data");
 			break;
 		}
 		else {
+			LogWarning("Failed to send, trying to resend");
 			_dataFifo[i].resendCount++;
 			_dataFifo[i].IsSent = false;
 			_dataFifo[i].sentTimeMs = millis();

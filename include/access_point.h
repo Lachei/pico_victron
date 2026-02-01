@@ -13,7 +13,7 @@ extern "C" {
  */
 struct access_point {
 	static access_point& Default() {
-		static access_point ap{.name = "pico_iot", .password="12345678"};
+		static access_point ap{.name = "victron-steuerung", .password="12345678"};
 		return ap;
 	}
 	// variables meant for public access

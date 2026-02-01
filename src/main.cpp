@@ -33,6 +33,7 @@ constexpr UBaseType_t CONTROL_TASK_PRIORITY = tskIDLE_PRIORITY + 10ul;
 constexpr uint GPIO_POWER = 26;
 constexpr uint GPIO_MIN_CAP = 27;
 
+uint32_t time_ms() { return time_us_64() / 1000; }
 uint32_t time_s() { return time_us_64() / 1000000; }
 
 void usb_comm_task(void *) {
@@ -101,6 +102,7 @@ void victron_control_task(void *) {
     adc_gpio_init(GPIO_MIN_CAP);
     settings &sets = settings::Default();
     sets.external_w = 0;
+    uint32_t last_iter_ms = time_ms();
 
     for (;;) {
         if (settings::changed)
@@ -113,6 +115,18 @@ void victron_control_task(void *) {
         float cur_power{}; // negative for charging the battery, positive for discharging
         SwitchState cur_mode{SwitchState::Sleep};
         float cur_bat_v = VEBus::Default().GetDcInfo().Voltage;
+        float cur_bat_a = VEBus::Default().GetMultiPlusStatus().DcCurrentA;
+        uint32_t cur_ms = time_ms();
+        if (cur_bat_a > .5) { // give some epsilon to avoid strange behaviour around  0
+            uint32_t cur_s = time_s();
+            if (measurements::Default().energy_values.empty() || 
+                cur_s - measurements::Default().last_load_time > 20) {
+                measurements::Default().energy_values.push(0);
+            }
+            measurements::Default().last_load_time = cur_s;
+            *measurements::Default().energy_values.back() += cur_bat_a * (cur_ms - last_iter_ms) / 1000 / 3600; // convert to Ah
+        }
+        last_iter_ms = cur_ms;
         if (sets.web_override) {
             cur_mode = from_web_state(sets.mode);
             float max_v, min_v;
@@ -145,7 +159,7 @@ void victron_control_task(void *) {
         VEBus::Default().SetSwitch(cur_mode);
         LogInfo("Set power to {}", cur_power);
         VEBus::Default().SetPower(i16(cur_power));
-        vTaskDelay(pdMS_TO_TICKS(500));
+        vTaskDelay(pdMS_TO_TICKS(2000)); // do the loop every 2 seconds
     }
 }
 

@@ -56,8 +56,9 @@ struct static_string {
 
 template<typename T, int N>
 struct static_vector {
-	std::array<T, N> storage{};
 	int cur_size{};
+	std::array<T, N> storage{};
+	constexpr bool operator==(const static_vector<T, N> &o) const { if (cur_size != o.cur_size) return false; for (int i = 0; i < cur_size; ++i) if (storage[i] != o.storage[i]) return false; return true; }
 	constexpr T& operator[](int i) { return (i < 0 || i >= cur_size) ? storage[0]: storage[i]; }
 	constexpr const T& operator[](int i) const { return (i < 0 || i >= cur_size) ? storage[0]: storage[i]; }
 	constexpr T* back() { return cur_size ? &storage[cur_size - 1]: nullptr; }
@@ -77,6 +78,7 @@ struct static_vector {
 	constexpr void clear() { cur_size = 0; }
 	constexpr bool empty() const { return cur_size == 0; }
 	constexpr bool full() const { return cur_size == N; }
+	constexpr std::span<T> slice(int off, int size = std::numeric_limits<int>::max()) { if (off > cur_size) return {}; return {begin() + off, uint32_t(std::min(cur_size - off, size))}; }
 	constexpr int size() const { return cur_size; }
 	constexpr void sanitize() { if (cur_size > N || cur_size < 0) cur_size = 0; }
 };
@@ -102,6 +104,7 @@ struct static_ring_buffer {
 	int cur_start{};
 	int cur_write{};
 	bool full{false};
+	constexpr T* back() { if (!full && cur_start == cur_write) return nullptr; return storage.data() + (cur_write + N - 1) % N; }
 	constexpr auto begin() { return iterator{*this, cur_start}; }
 	constexpr auto end() { return iterator{*this, cur_write}; }
 	constexpr auto begin() const { return iterator{*this, cur_start}; }

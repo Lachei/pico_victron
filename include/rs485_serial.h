@@ -62,5 +62,10 @@ struct rs485_serial {
 		irq_set_enabled(uart_irq, true);
 		uart_set_irq_enables(uart0, true, false); // enable receive callback only after callback is set
 	}
+
+	void enable_receive_callback(bool enable) { 
+		int uart_irq = info.uart == uart0 ? UART0_IRQ : UART1_IRQ;
+		irq_set_enabled(uart_irq, enable);
+	}
 };
 
