@@ -25,6 +25,7 @@
 #include "crypto_storage.h"
 #include "ntp_client.h"
 #include "ve_bus.h"
+#include "../modbus_layouts/inverter_sunspec.h"
 
 #define TEST_TASK_PRIORITY ( tskIDLE_PRIORITY + 1UL )
 

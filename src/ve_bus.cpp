@@ -534,8 +534,10 @@ void prepareCommandSetSwitchState(VEBusBuffer& buffer, SwitchState switchState)
 
 void stuffingFAtoFF(VEBusBuffer& buffer)
 {
+	if (buffer.size() <= 4)
+		return;
 	uint32_t fas{};
-	for (uint8_t v: buffer)
+	for (uint8_t v: buffer.slice(4))
 		if (v >= 0xFA)
 			++fas;
 
@@ -544,7 +546,7 @@ void stuffingFAtoFF(VEBusBuffer& buffer)
 		return;
 	}
 		
-	for (uint8_t *dst = buffer.back(), *src = dst - fas; src && src >= buffer.begin(); --src)
+	for (uint8_t *dst = buffer.back(), *src = dst - fas; src && src >= buffer.begin() + 4; --src)
 	{
 		if (*src >= 0xFA)
 		{
@@ -686,9 +688,9 @@ ReceivedMessageType VEBus::decodeVEbusFrame(VEBusBuffer& buffer)
 	{
 		if (buffer.size() < 6) return ReceivedMessageType::Unknown;
 		xSemaphoreTake(_semaphoreDataFifo, VEBUS_MAX_SEM_DELAY);
+		LogWarning("Got a response for message {}", (int)buffer[5]);
 		for (uint8_t i = 0; i < _dataFifo.size(); i++)
 		{
-			LogWarning("Got a response for a message");
 			if (_dataFifo[i].id != buffer[5]) continue;
 			_dataFifo[i].responseData = buffer;
 			break;
