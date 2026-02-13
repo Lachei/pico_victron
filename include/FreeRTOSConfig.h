@@ -57,13 +57,13 @@
 #define configUSE_RECURSIVE_MUTEXES             1
 #define configUSE_APPLICATION_TASK_TAG          0
 #define configUSE_COUNTING_SEMAPHORES           1
-#define configQUEUE_REGISTRY_SIZE               8
+#define configQUEUE_REGISTRY_SIZE		16 
 #define configUSE_QUEUE_SETS                    1
 #define configUSE_TIME_SLICING                  1
 #define configUSE_NEWLIB_REENTRANT              0
 // todo need this for lwip FreeRTOS sys_arch to compile
 #define configENABLE_BACKWARD_COMPATIBILITY     1
-#define configNUM_THREAD_LOCAL_STORAGE_POINTERS 5
+#define configNUM_THREAD_LOCAL_STORAGE_POINTERS 16
 #define configHEAP_CLEAR_MEMORY_ON_FREE         1
 
 /* System */
@@ -73,7 +73,7 @@
 /* Memory allocation related definitions. */
 #define configSUPPORT_STATIC_ALLOCATION         0
 #define configSUPPORT_DYNAMIC_ALLOCATION        1
-#define configTOTAL_HEAP_SIZE                   64 * 1024
+#define configTOTAL_HEAP_SIZE                   96 * 1024
 #define configAPPLICATION_ALLOCATED_HEAP        0
 
 /* Hook function related definitions. */
@@ -93,7 +93,7 @@
 /* Software timer related definitions. */
 #define configUSE_TIMERS                        1
 #define configTIMER_TASK_PRIORITY               ( configMAX_PRIORITIES - 1 )
-#define configTIMER_QUEUE_LENGTH                10
+#define configTIMER_QUEUE_LENGTH                12
 #define configTIMER_TASK_STACK_DEPTH            1024
 
 /* Interrupt nesting behaviour configuration. */

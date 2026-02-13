@@ -161,11 +161,15 @@ struct persistent_storage {
 					.dst_offset = start_paged};
 		// first erase as flash_range_program only allows to change 1s to 0s, but not the other way around
 		err_t res = flash_safe_execute(_flash_erase, (void*)&write_data, 500);
-		if (res != PICO_OK)
+		if (res != PICO_OK) {
+			LogError("Error erasing flash: {}", res);
 			return res;
-		res = flash_safe_execute(_flash_program, (void*)&write_data, 500);
-		if (res != PICO_OK)
+		}
+		res = flash_safe_execute(_flash_program, (void*)&write_data, 5000); // give writing more time to guarantee it is executed
+		if (res != PICO_OK) {
+			LogError("Error writing flash: {}", res);
 			return res;
+		}
 		return PICO_OK;
 	}
 	/*INTERNAL*/ static void __no_inline_not_in_flash_func(_flash_erase)(void *d) {

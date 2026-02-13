@@ -20,6 +20,9 @@ constexpr int16_t modbus_swap_i16(int16_t v) { return int16_t((uint16_t(v) >> 8)
 template<typename T>
 constexpr uint16 model_sunspec_size() { return  modbus_swap(sizeof(T) / 2 - 2); } // division by 2 as we calc in halfes, -2 for id and length
 
+constexpr uint16 MODE_CHARGE{0};
+constexpr uint16 MODE_DISCHARGE{1};
+
 // the following is an exact copy of registers for a fronius inverter
 
 #pragma pack(push, 1)
@@ -33,8 +36,8 @@ struct model_common {
 	string<32> 	device_model{"victron iot 1.0"};
 	string<16> 	options{""};
 	string<16> 	sw_meter_version{"1.0"};
-	string<32> 	serial_number{"1"};
-	uint16		device_address{modbus_swap(2)};
+	string<32> 	serial_number{"67"};
+	uint16		device_address{modbus_swap(1)};
 };
 struct model_inverter {
 	uint16		id_inverter{modbus_swap(113)};
@@ -195,7 +198,7 @@ struct model_mppt {
 	sunssf    	DCW_SF		{};
 	sunssf    	DCWH_SF		{};
 	bitfield32	Evt		{};
-	uint16    	N		{};
+	uint16    	N		{modbus_swap(4)};
 	uint16    	TmsPer		{};
 	uint16    	module_1_ID	{};
 	string<16>	module_1_IDStr	{"MPPT1"};
@@ -218,7 +221,7 @@ struct model_mppt {
 	enum16    	module_2_DCSt	{};
 	bitfield32	module_2_DCEvt	{};
 	uint16    	module_3_ID	{};
-	string<16>	module_3_IDStr	{"MPPT3"};
+	string<16>	module_3_IDStr	{"StCha3"};
 	uint16    	module_3_DCA	{};
 	uint16    	module_3_DCV	{};
 	uint16    	module_3_DCW	{};
@@ -228,7 +231,7 @@ struct model_mppt {
 	enum16    	module_3_DCSt	{};
 	bitfield32	module_3_DCEvt	{};
 	uint16    	module_4_ID	{};
-	string<16>	module_4_IDStr	{"MPPT4"};
+	string<16>	module_4_IDStr	{"StDisCha4"};
 	uint16    	module_4_DCA	{};
 	uint16    	module_4_DCV	{};
 	uint16    	module_4_DCW	{};
@@ -271,7 +274,7 @@ struct model_end {
 	uint16		length_end	{0};
 };
 
-struct inverter_registers: 
+struct sunspec_registers: 
 	public model_start,
 	public model_common,
 	public model_inverter,
@@ -285,7 +288,7 @@ struct inverter_registers:
 { constexpr static int OFFSET = 40000; };
 #pragma pack(pop)
 
-struct inverter_fronius {
+struct inverter_layout {
 	// sunspec modbus layout only has writable halfs registers
-	inverter_registers halfs_registers{};
+	sunspec_registers halfs_registers{};
 };

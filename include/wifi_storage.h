@@ -35,6 +35,9 @@ struct wifi_storage {
 		if (!hostname_changed)
 			return;
 
+		if (PICO_OK != persistent_storage_t::Default().write(hostname, &persistent_storage_layout::hostname))
+			LogError("Failed to store hostname");
+
 		LogInfo("Hostname change detected, adopting hostname");
 		struct netif* nif = &cyw43_state.netif[CYW43_ITF_STA];
 		netif_set_hostname(nif, hostname.data());
@@ -65,6 +68,11 @@ struct wifi_storage {
 			cyw43_arch_disable_sta_mode();
 			cyw43_arch_enable_sta_mode();
 			cyw43_arch_lwip_end();
+
+			if (PICO_OK != persistent_storage_t::Default().write(ssid_wifi, &persistent_storage_layout::ssid_wifi))
+				LogError("Failed to store ssid_wifi");
+			if (PICO_OK != persistent_storage_t::Default().write(pwd_wifi, &persistent_storage_layout::pwd_wifi))
+				LogError("Failed to store pwd_wifi");
 		}
 		if (PICO_OK != cyw43_arch_wifi_connect_async(ssid_wifi.data(), pwd_wifi.data(), CYW43_AUTH_WPA2_AES_PSK)) {
 			LogWarning("failed to call cyw43_arch_wifi_connect_async()");

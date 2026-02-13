@@ -11,8 +11,8 @@
 	</body>
 	<script>
 	var mw=false;
-	async function m() {
-		if(parent.p!="u"||!parent.lo||mw)return;
+	async function m(f=false) {
+		if(!f&&(parent.p!="u"||!parent.lo||mw))return;
 		mw=true;
 		let ms=await (await fetch("/ve_infos")).json();
 		let h="";
@@ -33,12 +33,12 @@
 		let t=await logs.text();
 		lv.innerHTML=t.replace(/(?:\r\n|\r|\n)/g, '<br>');
 	};
+	const sl=async()=>{await fetch("set_log_level",{method:"POST",body:ll.options[ll.selectedIndex].text});};
 	window.onload = ()=>{
 		parent.m["u"]=l;
-		m();
 		setInterval(m,3300);
 		setInterval(l,4000);
 	}
-	const sl=async()=>{await fetch("set_log_level",{method:"POST",body:ll.options[ll.selectedIndex].text});};
+	m(true);
 	</script>
 </html>

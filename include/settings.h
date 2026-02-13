@@ -24,24 +24,24 @@ struct settings {
 	float min_w{-4000};
 	float max_w{4000};
 	float local_w{4000};
-	float local_min_v{52};
+	float local_min_soc{50};
 	float external_w{}; // used for external power setting, positive for discharging batter, negative for charging
-	float bat_min_v{46};
-	float bat_max_v{56};
+	float bat_min_v{42};
+	float bat_max_v{59};
 
 	static settings& Default() {
 		static settings s{};
 		return s;
 	}
 	constexpr void sanitize() {
-		if (bat_min_v < 5 || bat_min_v > 60 || bat_max_v < 5 || bat_max_v > 60)
+		if (std::isnan(bat_min_v) || bat_min_v < 5 || bat_min_v > 60 || bat_max_v < 5 || bat_max_v > 60)
 			*this = {}; // default init if something is whonky
 	}
 	/** @brief writes the settings struct as json to the static strig s */
 	template<int N>
 	constexpr void dump_to_json(static_string<N> &s) const {
 		s.append_formatted(R"({{"override":{},"mode":{},"mmtype":{},"mins":{},"maxs":{},"minv":{},"maxv":{},"minw":{},"maxw":{},"localw":{},"localminv":{},"batminv":{},"batmaxv":{}}})", 
-		     pb(web_override), mode, min_max_type, min_soc, max_soc, min_v, max_v, min_w, max_w, local_w, local_min_v, bat_min_v, bat_max_v);
+		     pb(web_override), mode, min_max_type, min_soc, max_soc, min_v, max_v, min_w, max_w, local_w, local_min_soc, bat_min_v, bat_max_v);
 	}
 	constexpr bool parse_from_json(std::string_view json) {
 		ASSERT_TRUE(parse_remove_json_obj_start(json));
@@ -119,7 +119,7 @@ std::ostream& operator<<(std::ostream &os, const settings &s) {
 	os << "min_w        : " << s.min_w << std::endl;
 	os << "max_w        : " << s.max_w << std::endl;
 	os << "local_w      : " << s.local_w << std::endl;
-	os << "local_min_v  : " << s.local_min_v << std::endl;
+	os << "local_min_soc  : " << s.local_min_soc << std::endl;
 	os << "bat_min_v    : " << s.bat_min_v << std::endl;
 	os << "bat_max_v    : " << s.bat_max_v << std::endl;
 	return os;
@@ -149,8 +149,8 @@ std::istream& operator>>(std::istream &is, settings &s) {
 		is >> s.max_w;
 	else if (key == "local_w") 
 		is >> s.local_w;
-	else if (key == "local_min_v") 
-		is >> s.local_min_v;
+	else if (key == "local_min_soc") 
+		is >> s.local_min_soc;
 	else if (key == "bat_min_v") 
 		is >> s.bat_min_v;
 	else if (key == "bat_max_v") 

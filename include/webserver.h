@@ -7,7 +7,6 @@
 #include "victron-control-html.h"
 #include "wifi_storage.h"
 #include "access_point.h"
-#include "persistent_storage.h"
 #include "crypto_storage.h"
 #include "ntp_client.h"
 #include "ve_bus.h"
@@ -194,8 +193,6 @@ tcp_server_typed& Webserver() {
 		wifi_storage::Default().hostname.fill(req.body);
 		wifi_storage::Default().hostname.make_c_str_safe();
 		wifi_storage::Default().hostname_changed = true;
-		if (PICO_OK != persistent_storage_t::Default().write(wifi_storage::Default().hostname, &persistent_storage_layout::hostname))
-			LogError("Failed to store hostname");
 	};
 	const auto get_ap_active = [] (const tcp_server_typed::message_buffer &req, tcp_server_typed::message_buffer &res) {
 		std::string_view response = access_point::Default().active ? "true": "false";
@@ -234,10 +231,6 @@ tcp_server_typed& Webserver() {
 		wifi.pwd_wifi.fill(password);
 		wifi.pwd_wifi.make_c_str_safe();
 		wifi.wifi_changed = true;
-		if (PICO_OK != persistent_storage_t::Default().write(wifi.ssid_wifi, &persistent_storage_layout::ssid_wifi))
-			LogError("Failed to store ssid_wifi");
-		if (PICO_OK != persistent_storage_t::Default().write(wifi.pwd_wifi, &persistent_storage_layout::pwd_wifi))
-			LogError("Failed to store pwd_wifi");
 	};
 	const auto set_password = [&fill_unauthorized] (const tcp_server_typed::message_buffer &req, tcp_server_typed::message_buffer &res) {
 		std::string_view auth_header = req.headers_view.get_header("Authorization");

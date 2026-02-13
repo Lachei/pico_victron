@@ -5,6 +5,15 @@ cmake_minimum_required(VERSION 3.16)
 if (NOT FREERTOS_KERNEL_PATH AND NOT DEFINED ENV{FREERTOS_KERNEL_PATH})
         message(FATAL_ERROR "Missing FreeRTOS kernel source path. Set by declaring environment variable FREERTOS_KERNEL_PATH or add -DFREERTOS_KERNEL_PATH=<path> to the cmake call")
 endif()
+if (NOT FREERTOS_KERNEL_PATH AND DEFINED ENV{FREERTOS_KERNEL_PATH})
+        set(FREERTOS_KERNEL_PATH ENV{FREERTOS_KERNEL_PATH})
+endif()
+if (NOT LIBMODBUS_STATIC_PATH AND NOT DEFINED ENV{LIBMODBUS_STATIC_PATH})
+        message(FATAL_ERROR "Missing LIBMODBUS_STATIC_PATH source path. Set by declaring environment variable LIBMODBUS_STATIC_PATH or add -DLIBMODBUS_STATIC_PATH=<path> to the cmake call. Repo link: https://github.com/Lachei/libmodbus-static.git")
+endif()
+if (NOT LIBMODBUS_STATIC_PATH AND DEFINED ENV{LIBMODBUS_STATIC_PATH})
+        set(LIBMODBUS_STATIC_PATH ENV{LIBMODBUS_STATIC_PATH})
+endif()
 
 if (NOT PICO_BOARD)
         message("No board set, defaulting to pico_w")
@@ -15,6 +24,7 @@ include(pico_sdk_import.cmake)
 include(pico_extras_import_optional.cmake)
 include(FreeRTOS_Kernel_import.cmake)
 include(cmake/html_pages_library.cmake)
+add_subdirectory(${LIBMODBUS_STATIC_PATH} libmodbus-static)
 
 add_compile_options(-Wall)
 
@@ -52,6 +62,7 @@ add_executable(victron-control
         src/log_storage.cpp
         src/ntp_client.cpp
         src/ve_bus.cpp
+        src/modbus_server.cpp
 )
 set_property(TARGET victron-control PROPERTY CXX_STANDARD 26)
 target_compile_definitions(victron-control PRIVATE
@@ -70,6 +81,7 @@ target_link_libraries(victron-control
         pico_lwip_mdns
         FreeRTOS-Kernel-Heap4 # FreeRTOS kernel and dynamic heap
         victron-control-html
+        libmodbus-static
 )
 pico_add_extra_outputs(victron-control)
 pico_enable_stdio_usb(victron-control 1)

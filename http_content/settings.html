@@ -23,8 +23,8 @@
 		<p><label for="batminv">Min Batterie (V):</label><input id="batminv" value="46" onchange="ch();"><br>
 		<p><label for="batminv">Max Batterie (V):</label><input id="batmaxv" value="56" onchange="ch();"><br>
 		<hr>
-		<p><label for="localw">Drehpoti Leistung(w)</label><input id="localw" disabled value="0">
-		<p><label for="localv">Drehpoti Min Spannung(V)</label><input id="localv" disabled value="0">
+		<p><label for="localw">Drehpoti Leistung(W)</label><input id="localw" disabled value="0">
+		<p><label for="localv">Drehpoti Min Soc(%)</label><input id="localv" disabled value="0">
 		<hr>
 		<h4>Passwort ändern</h4>
 		<p><input id="pw1" type="password"><label for="pw1">Passwort eingeben</label>
@@ -65,6 +65,7 @@ async function snyst() {
 	batmaxv.value=s.batmaxv;
 	localw.value=s.localw;
 	localv.value=s.localminv;
+	sm();
 }
 	en(false);
 	sm();

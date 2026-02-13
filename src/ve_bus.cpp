@@ -90,7 +90,7 @@ VEBus::~VEBus()
 void VEBus::Setup(bool autostart)
 {
 	if (autostart) StartCommunication();
-	xTaskCreate(communication_task, "vebus_task", 4096, this, 8, NULL);
+	xTaskCreate(communication_task, "vebus_task", 4096, this, 1, NULL);
 }
 
 void VEBus::Maintain()
@@ -270,7 +270,8 @@ uint8_t VEBus::ReadInfo(Settings setting)
 
 void VEBus::SetSwitch(SwitchState state)
 {
-	Data data;
+	Data data{};
+	if (!getNextFreeId_1(data.id)) return;
 	data.responseExpected = false;
 	//data.command //add stwichCommandNr
 	prepareCommandSetSwitchState(data.requestData, state);
@@ -395,7 +396,6 @@ void VEBus::addOrUpdateFifo(const Data &data, bool updateIfExist)
 				element.sentTimeMs = millis();
 				element.IsSent = false;
 				xSemaphoreGive(_semaphoreDataFifo);
-				LogInfo("Updated data in fifo[{}]", _dataFifo.size());
 				return;
 			}
 		}
@@ -404,7 +404,6 @@ void VEBus::addOrUpdateFifo(const Data &data, bool updateIfExist)
 	if (_dataFifo.push(data)) {
 		_dataFifo.back()->responseData.clear();
 		_dataFifo.back()->sentTimeMs = millis();
-		LogInfo("Added data to fifo[{}]", _dataFifo.size());
 	} else
 		LogError("Failed to add request");
 	xSemaphoreGive(_semaphoreDataFifo);
@@ -678,8 +677,9 @@ float convertSettingToValue(Settings setting, uint16_t rawValue, const SettingIn
 ReceivedMessageType VEBus::decodeVEbusFrame(VEBusBuffer& buffer)
 {
 	ReceivedMessageType result = ReceivedMessageType::Unknown;
+	if ((buffer[0] == MK3_ID_0) && (buffer[1] == MK3_ID_0)) 
+		LogInfo("MK3 to Victron: df {:x}, frnr {:x}, cmd {:x}: {:x}, {:x}", buffer[2], buffer[3], buffer[4], buffer[5], buffer[5]);
 	if ((buffer[0] != MP_ID_0) || (buffer[1] != MP_ID_1)) return ReceivedMessageType::Unknown;
-	LogWarning("Retrieved data frame type: 0x{:02x}", int(buffer[4]));
 	if ((buffer[2] == SYNC_FRAME) && (buffer.size() == 10) && (buffer[4] == SYNC_BYTE)) return ReceivedMessageType::sync;
 	if (buffer[2] != DATA_FRAME) return ReceivedMessageType::Unknown;
 
@@ -1130,8 +1130,6 @@ void VEBus::saveResponseData(const Data &data)
 
 	if (callResponseCb && response_cb)
 		response_cb(responseData);
-
-	LogInfo("Res: {}", data.responseData);
 }
 
 void VEBus::saveSettingInfoData(const Data& data)
@@ -1172,7 +1170,7 @@ void VEBus::checkResponseTimeout()
 		Data &d = _dataFifo[i];
 		if (millis() - d.sentTimeMs < VEBUS_RESPONSE_TIMEOUT)
 			continue;
-		LogWarning("Timeout id: {} command {} resend count: {}", d.id, d.command, d.resendCount);
+		LogWarning("Timeout id: {:x} command {} resend count: {}", d.id, d.command, d.resendCount);
 		if (d.resendCount >= VEBUS_MAX_RESEND) {
 			std::swap(d, *_dataFifo.pop());
 			LogWarning("The message is deleted.");

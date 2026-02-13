@@ -247,10 +247,10 @@ namespace VEBusDefinition
         L4 = 0x05,
         L3 = 0x06,
         L2 = 0x07,
-        S_L1 = 0x08,
-        S_L2 = 0x09,
-        S_L3 = 0x0A,
-        S_L4 = 0x0B,
+        S_L1 = 0x08, // 1 phase system
+        S_L2 = 0x09, // 2 phase system
+        S_L3 = 0x0A, // 3 phase system
+        S_L4 = 0x0B, // 4 phase system
         DC = 0x0C,
     };
     constexpr uint8_t PhaseToIdx(PhaseInfo p) { return static_cast<uint8_t>(p) - static_cast<uint8_t>(PhaseInfo::L4); }

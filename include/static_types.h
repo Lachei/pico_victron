@@ -68,8 +68,8 @@ struct static_vector {
 	constexpr const T* begin() const { return storage.begin(); }
 	constexpr const T* end() const { return storage.begin() + cur_size; }
 	constexpr T* push() { if (cur_size >= N) return {}; return storage.data() + cur_size++; }
-	constexpr bool push(const T& e) { if (cur_size == N) return false; storage[cur_size++] = e; return true; }
-	constexpr bool push(T&& e) { if (cur_size == N) return false; storage[cur_size++] = std::move(e); return true; }
+	constexpr bool push(const T& e) { if (cur_size >= N) return false; storage[cur_size++] = e; return true; }
+	constexpr bool push(T&& e) { if (cur_size >= N) return false; storage[cur_size++] = std::move(e); return true; }
 	constexpr T* pop() { if (cur_size) --cur_size; return end(); }
 	template<typename F>
 	constexpr void remove_if(F &&f) { for (int i = cur_size - 1; i >= 0; --i) if( f(storage[i]) ) { std::swap(storage[i], storage[cur_size - 1]); --cur_size; } }
