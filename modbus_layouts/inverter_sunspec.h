@@ -20,8 +20,12 @@ constexpr int16_t modbus_swap_i16(int16_t v) { return int16_t((uint16_t(v) >> 8)
 template<typename T>
 constexpr uint16 model_sunspec_size() { return  modbus_swap(sizeof(T) / 2 - 2); } // division by 2 as we calc in halfes, -2 for id and length
 
-constexpr uint16 MODE_CHARGE{0};
-constexpr uint16 MODE_DISCHARGE{1};
+// StorCtl_Mod bits: bit0 activates the charge limit InWRte, bit1 the discharge limit OutWRte
+constexpr uint16 STOR_CTL_LIMIT_CHARGE{1};
+constexpr uint16 STOR_CTL_LIMIT_DISCHARGE{2};
+// ChaGriSet values
+constexpr uint16 CHA_GRI_SET_PV{0};
+constexpr uint16 CHA_GRI_SET_GRID{1};
 
 // the following is an exact copy of registers for a fronius inverter
 
@@ -244,18 +248,18 @@ struct model_mppt {
 struct model_storage {
 	uint16		id_storage		{modbus_swap(124)};
 	uint16		length_storage		{model_sunspec_size<model_storage>()};
-	uint16    	WChaMax			{modbus_swap(10000)}; // use this in combination of StorCtl_Mod to set charge/discharge
+	uint16    	WChaMax			{modbus_swap(10000)}; // max charge power, reference for InWRte and OutWRte
 	uint16    	WChaGra			{modbus_swap(100)};
 	uint16    	WDisChaGra		{modbus_swap(100)};
-	bitfield16	StorCtl_Mod		{}; // 0: Charge, 1: Discharge
+	bitfield16	StorCtl_Mod		{}; // Bit0: charge limit (InWRte) active, Bit1: discharge limit (OutWRte) active
 	uint16    	VAChaMax		{};
 	uint16    	MinRsvPct		{};
 	uint16    	ChaState		{}; // SOC 
 	uint16    	StorAval		{}; // not supported
 	uint16    	InBatV			{}; // battery voltage
 	enum16    	ChaSt			{}; // status state
-	int16     	OutWRte			{modbus_swap_i16(10000)};
-	int16     	InWRte			{modbus_swap_i16(10000)};
+	int16     	OutWRte			{modbus_swap_i16(10000)}; // max discharge in % WChaMax, negative forces charging
+	int16     	InWRte			{modbus_swap_i16(10000)}; // max charge in % WChaMax, negative forces discharging
 	uint16    	InOutWRte_WinTms	{};
 	uint16    	InOutWRte_RvrtTms	{};
 	uint16    	InOutWRte_RmpTms 	{};

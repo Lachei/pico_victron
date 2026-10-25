@@ -135,6 +135,40 @@ float read_pot(uint gpio) {
     uint16_t adc = adc_read();
     return std::clamp(adc * SCALE * 1.5f - 0.25f, .0f, 1.f);
 }
+// Sunspec storage control (model 124, same as fronius gen24): the battery power (positive discharging) is
+// kept inside [-InWRte, OutWRte] * WChaMax, where InWRte is only active with StorCtl_Mod bit0 and OutWRte with bit1.
+// Negative rates force the other direction (eg. InWRte = -50% forces discharging with at least 50%).
+// The adapter has no own optimization, so inside the allowed window it stays as close to 0W as possible.
+// If no write happened for InOutWRte_RvrtTms seconds the limits are reverted to their defaults.
+float sunspec_storage_power_w(modbus_register &r) {
+    using regs = sunspec_registers;
+    sunssf rate_sf = r.read(&regs::InOutWRte_SF);
+    uint16_t revert_s = r.read(&regs::InOutWRte_RvrtTms);
+    uint16_t mode = r.read(&regs::StorCtl_Mod);
+    if (mode && revert_s && time_ms() - modbus_server::Default().last_write_ms >= revert_s * 1000u) {
+        LogInfo("Storage control timed out, reverting");
+        mode = 0;
+        r.write(mode, &regs::StorCtl_Mod);
+        r.write(to_scaled<int16>(100, rate_sf), &regs::InWRte);
+        r.write(to_scaled<int16>(100, rate_sf), &regs::OutWRte);
+    }
+    float ref_w = to_unscaled(r.read(&regs::WChaMax), r.read(&regs::WChaMax_SF));
+    float min_w = -ref_w; // most charging allowed
+    float max_w = ref_w;  // most discharging allowed
+    if (mode & STOR_CTL_LIMIT_CHARGE)
+        min_w = -to_unscaled(r.read(&regs::InWRte), rate_sf) / 100 * ref_w;
+    if (mode & STOR_CTL_LIMIT_DISCHARGE)
+        max_w = to_unscaled(r.read(&regs::OutWRte), rate_sf) / 100 * ref_w;
+    // all charging comes from the ac side, which is only allowed when charging from grid is enabled
+    if (r.read(&regs::ChaGriSet) == CHA_GRI_SET_PV) {
+        min_w = std::max(min_w, .0f);
+        max_w = std::max(max_w, .0f); // a forced charge is not possible either
+    }
+    if (min_w > max_w) // contradicting limits, take the middle
+        return (min_w + max_w) / 2;
+    return std::clamp(.0f, min_w, max_w);
+}
+
 // positive goal_w means discharging, negative means charging
 float get_remaining_w(float goal_w, float cur_v, float min_v, float max_v) {
     // 0.1V is the threshold where still max power is available. Afterwards linearly scales down
@@ -154,6 +188,8 @@ void victron_control_task(void *) {
     settings &sets = settings::Default();
     modbus_register& mb_register = modbus_server::Default().registers;
     sets.external_w = 0;
+    // the rates of the storage control are relative to WChaMax, so it has to report the real max power
+    mb_register.write(to_scaled<uint16>(MAX_POWER, mb_register.read(&sunspec_registers::WChaMax_SF)), &sunspec_registers::WChaMax);
 
     uint32_t last_iter_ms = time_ms();
     float stable_v{};
@@ -171,10 +207,7 @@ void victron_control_task(void *) {
 		persistent_storage_t::Default().write(sets, &persistent_storage_layout::sets);
         settings::changed = false;
 
-        sets.external_w = to_unscaled(mb_register.read(&sunspec_registers::WChaMax),
-                                      mb_register.read(&sunspec_registers::WChaMax_SF));
-        if (mb_register.read(&sunspec_registers::StorCtl_Mod) == MODE_CHARGE)
-            sets.external_w *= -1;
+        sets.external_w = sunspec_storage_power_w(mb_register);
 
         // feed power to battery
         sets.local_w = read_pot(GPIO_POWER) * MAX_POWER;

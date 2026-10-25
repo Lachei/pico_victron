@@ -28,6 +28,7 @@ struct modbus_server {
 	struct tcp_pcb *tcp_pcb{};
 	static_vector<TaskHandle_t, 4> external_ctrl_dependent_tasks{}; // tasks in here will be unlocked
 	std::function<void(modbus_register&)> pre_response_function{};
+	uint32_t last_write_ms{}; // time of the last register write by a client, used for the sunspec revert timeouts
 	
 
 	/** @brief Starts the lwip tcp server on specified port 

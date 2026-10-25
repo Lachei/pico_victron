@@ -6,6 +6,7 @@
 #include "log_storage.h"
 
 #include "lwip/pbuf.h"
+#include "pico/time.h"
 
 using namespace libmodbus_static;
 
@@ -105,6 +106,8 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
 				continue;
 			}
 			LogInfo("Got request for addr {} length {}", bs(server.registers.lc.i1), bs(server.registers.lc.i2));
+			if (server.registers.lc.fc == function_code::WRITE_SINGLE_REGISTER || server.registers.lc.fc == function_code::WRITE_MULTIPLE_REGISTERS)
+				server.last_write_ms = time_us_64() / 1000;
 			if (server.pre_response_function)
 				server.pre_response_function(server.registers);
 			auto [res, err] = server.registers.get_frame_response();
